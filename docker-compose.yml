@@ -4,15 +4,16 @@ services:
   boomit-api:
     build:
       context: .
-      dockerfile: deployments/docker/Dockerfile
+      dockerfile: deployments/docker/dockerfile
     ports:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
+      - PYTHONPATH=/app
     volumes:
       - .:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
   redis:
     image: redis:7-alpine

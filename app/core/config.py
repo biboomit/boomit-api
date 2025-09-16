@@ -191,6 +191,8 @@ settings = get_settings()
 # BigQuery table mappings for different environments
 def get_bigquery_tables() -> dict:
     """Get BigQuery table names based on environment"""
+    
+    raise NotImplementedError("TODO: re-hacer funcion")
     base_dataset = settings.BIGQUERY_DATASET
     
     if settings.is_production:
@@ -220,7 +222,7 @@ def get_bigquery_tables() -> dict:
 
 
 # Export commonly used configurations
-BIGQUERY_TABLES = get_bigquery_tables()
+# BIGQUERY_TABLES = get_bigquery_tables()
 
 
 # Development helpers
