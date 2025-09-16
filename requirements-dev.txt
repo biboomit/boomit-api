@@ -1,0 +1,18 @@
+﻿-r requirements.txt
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+httpx==0.25.2
+faker==20.1.0
+factory-boy==3.3.0
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+isort==5.12.0
+pre-commit==3.6.0
+bandit[toml]==1.7.5
+safety==2.3.5
+coverage==7.3.2
