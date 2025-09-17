@@ -238,8 +238,8 @@ def get_bigquery_tables() -> dict:
 
 class BigQueryConfig:
     def __init__(self):
-        self.project_id = os.getenv("BIGQUERY_PROJECT_ID")
-        self.dataset_id = os.getenv("BIGQUERY_DATASET_ID")
+        self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        self.dataset_id = os.getenv("BIGQUERY_DATASET")
         self.credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
         if self.credentials_path:

@@ -24,6 +24,14 @@ RUN adduser \
     --uid "${UID}" \
     appuser
 
+# Create directorie for credentials
+RUN mkdir -p /app/ && chown appuser:appuser /app/
+
+
+# Copy credentials
+COPY marketing-dwh-specs-100b60190539.json /app/marketing-dwh-specs-100b60190539.json
+RUN chown appuser:appuser /app/marketing-dwh-specs-100b60190539.json
+
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
 # Leverage a bind mount to requirements.txt to avoid having to copy them into

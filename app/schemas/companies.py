@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 class CompanyResponse(BaseModel):
-    empresa_id: int = Field(..., description="Identificador único de la empresa")
+    empresa_id: str = Field(..., description="Identificador único de la empresa")
     nombre_empresa: str = Field(..., description="Nombre de la empresa")
     pais: str = Field(..., description="País donde se encuentra la empresa")
     industria: str = Field(..., description="Industria a la que pertenece la empresa")
@@ -19,7 +19,7 @@ class CompanyResponse(BaseModel):
         orm_mode = True
         schema_extra = {
             "example": {
-                "empresa_id": 1,
+                "empresa_id": "ee0001",
                 "nombre_empresa": "Tech Solutions",
                 "pais": "España",
                 "industria": "Tecnología",
@@ -39,7 +39,7 @@ class CompanyListResponse(BaseModel):
     per_page: int
     
 class CompanyInternal(BaseModel):
-    empresa_id: int
+    empresa_id: str
     nombre_empresa: str
     pais: str
     industria: str
