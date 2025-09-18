@@ -4,6 +4,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.services.companies import CompanyService, company_service
 from app.schemas.companies import CompanyResponse, CompanyListResponse
+from app.middleware.auth import get_current_user
 
 
 router = APIRouter()
@@ -23,6 +24,7 @@ async def get_companies(
         description="Number of items per page",
     ),
     service: CompanyService = Depends(get_company_service),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get a list of companies with pagination.
 

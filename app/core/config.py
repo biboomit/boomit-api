@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
+    
+    # Auth0 Configuration
+    AUTH0_DOMAIN: str = Field(default="your-auth0-domain")
+    AUTH0_AUDIENCE: str = Field(default="your-auth0-audience")
+    AUTH0_ALGORITHMS: str = Field(default="RS256")
 
     # Google Cloud Configuration
     GOOGLE_CLOUD_PROJECT: str = Field(default="your-gcp-project")
