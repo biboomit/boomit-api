@@ -34,3 +34,14 @@ class DatabaseConnectionError(BoomitAPIException):
         )
 
 
+class AuthError(BoomitAPIException):
+    def __init__(
+        self,
+        message: str = "Authentication error",
+        status_code: int = 401,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        logger.warning(f"AuthError: {message}, Details: {details}")
+        super().__init__(
+            message, status_code=status_code, error_code="AUTH_ERROR", details=details
+        )
