@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from datetime import datetime
 
 from app.core.config import settings
+from app.middleware.auth import get_current_user
 from app.services.dashboards import DashboardService, dashboard_service
 from app.schemas.dashboards import DashboardResponse, DashboardListResponse
 
@@ -21,6 +22,7 @@ async def get_dashboards(
         description="Number of items per page",
     ),
     service: DashboardService = Depends(get_dashboard_service),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get a list of dashboards with pagination.
 
