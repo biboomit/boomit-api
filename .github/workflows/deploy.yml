@@ -47,6 +47,10 @@ jobs:
       run: |-
         gcloud --quiet auth configure-docker $REGISTRY_LOCATION
 
+    - name: Install GKE Auth Plugin
+      run: |-
+        gcloud components install gke-gcloud-auth-plugin
+
     - name: Create BigQuery credentials file
       run: |
         echo '${{ secrets.GCP_BIGQUERY_CREDENTIALS }}' > marketing-dwh-specs-100b60190539.json
