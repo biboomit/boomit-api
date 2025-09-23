@@ -31,18 +31,18 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: str = Field(default="*")
     CORS_ORIGINS: str = Field(default="*")
 
-    # JWT Security
+    # JWT Security - Updated for HS256
     SECRET_KEY: str = Field(
-        default="change-this-in-production-with-a-secure-random-key-of-at-least-32-characters"
+        default="boomit-jwt-secret-key-change-in-production-2024"
     )
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
     
-    # Auth0 Configuration
-    AUTH0_DOMAIN: str = Field(default="your-auth0-domain")
-    AUTH0_AUDIENCE: str = Field(default="your-auth0-audience")
-    AUTH0_ALGORITHMS: str = Field(default="RS256")
+    # Auth0 Configuration - DEPRECATED (commented out)
+    # AUTH0_DOMAIN: str = Field(default="your-auth0-domain")
+    # AUTH0_AUDIENCE: str = Field(default="your-auth0-audience")
+    # AUTH0_ALGORITHMS: str = Field(default="RS256")
 
     # Google Cloud Configuration
     GOOGLE_CLOUD_PROJECT: str = Field(default="your-gcp-project")
@@ -126,6 +126,14 @@ class Settings(BaseSettings):
     def validate_port(cls, v):
         if not 1 <= v <= 65535:
             raise ValueError("PORT must be between 1 and 65535")
+        return v
+
+    @field_validator("ALGORITHM")
+    @classmethod
+    def validate_algorithm(cls, v):
+        allowed = ["HS256", "HS384", "HS512", "RS256", "RS384", "RS512"]
+        if v not in allowed:
+            raise ValueError(f"ALGORITHM must be one of {allowed}, got: {v}")
         return v
 
     # Helper methods to convert strings to lists
@@ -270,6 +278,8 @@ def print_config():
     print(f"Environment: {settings.ENVIRONMENT}")
     print(f"Debug: {settings.DEBUG}")
     print(f"Host: {settings.HOST}:{settings.PORT}")
+    print(f"JWT Algorithm: {settings.ALGORITHM}")
+    print(f"Token Expiry: {settings.ACCESS_TOKEN_EXPIRE_MINUTES} minutes")
     print(f"GCP Project: {settings.GOOGLE_CLOUD_PROJECT}")
     print(f"BigQuery Dataset: {settings.BIGQUERY_DATASET}")
     print(f"Docs Enabled: {settings.docs_enabled}")
