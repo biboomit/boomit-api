@@ -45,7 +45,7 @@ jobs:
 
     - name: Create BigQuery credentials file
       run: |
-        echo '${{ secrets.GCP_BIGQUERY_CREDENTIALS }}' > deployments/docker/marketing-dwh-specs-100b60190539.json
+        echo '${{ secrets.GCP_BIGQUERY_CREDENTIALS }}' > marketing-dwh-specs-100b60190539.json
 
     - name: Get next version
       id: version
