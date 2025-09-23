@@ -4,9 +4,11 @@ services:
   boomit-api:
     build:
       context: .
-      dockerfile: deployments/docker/dockerfile
+      dockerfile: deployments/docker/Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - ENVIRONMENT=development
       - DEBUG=true

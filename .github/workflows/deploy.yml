@@ -1,0 +1,121 @@
+name: Build and Deploy to GKE
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: ${{ secrets.GKE_CLUSTER_NAME }}
+  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  DEPLOYMENT_NAME: boomit-api
+  IMAGE: boomit-api
+  REGISTRY_LOCATION: us-central1-docker.pkg.dev
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - id: auth
+      name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Setup Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Configure Docker to use gcloud as credential helper
+      run: |-
+        gcloud --quiet auth configure-docker $REGISTRY_LOCATION
+
+    - name: Get next version
+      id: version
+      run: |
+        # Obtener último tag de versión
+        git fetch --tags
+        LATEST_TAG=$(git tag -l "v*.*.*" | sort -V | tail -n1)
+        
+        if [ -z "$LATEST_TAG" ]; then
+          # Si no hay tags, empezar con v1.0.0
+          NEW_VERSION="v1.0.0"
+        else
+          # Incrementar versión patch
+          VERSION_NUMBER=$(echo $LATEST_TAG | sed 's/v//')
+          IFS='.' read -r -a VERSION_PARTS <<< "$VERSION_NUMBER"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+        fi
+        
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Next version: $NEW_VERSION"
+
+    - name: Build Docker image
+      run: |-
+        docker build \
+          --tag "$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:$GITHUB_SHA" \
+          --tag "$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:${{ steps.version.outputs.version }}" \
+          --tag "$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:latest" \
+          --file deployments/docker/Dockerfile \
+          .
+
+    - name: Publish Docker image
+      run: |-
+        docker push "$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:$GITHUB_SHA"
+        docker push "$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:${{ steps.version.outputs.version }}"
+        docker push "$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:latest"
+
+    - name: Create and push git tag
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag ${{ steps.version.outputs.version }}
+        git push origin ${{ steps.version.outputs.version }}
+
+    - name: Get GKE credentials
+      run: |-
+        gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+
+    - name: Deploy to GKE
+      run: |-
+        # Actualizar el deployment con la nueva imagen
+        kubectl set image deployment/$DEPLOYMENT_NAME \
+          boomit-api-sha256-1="$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:$GITHUB_SHA" \
+          --namespace=default
+        
+        # Actualizar el label de versión en el deployment
+        kubectl patch deployment $DEPLOYMENT_NAME \
+          --namespace=default \
+          --type='merge' \
+          -p='{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}, "spec":{"template":{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}}}}'
+        
+        # Esperar a que el rollout se complete
+        kubectl rollout status deployment/$DEPLOYMENT_NAME --namespace=default --timeout=300s
+        
+        # Verificar el deployment
+        kubectl get deployment $DEPLOYMENT_NAME --namespace=default
+
+    - name: Deployment Summary
+      run: |
+        echo "## Deployment Successful! 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Image deployed:** \`$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:$GITHUB_SHA\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Version tag:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** \`$GITHUB_SHA\`" >> $GITHUB_STEP_SUMMARY
