@@ -112,11 +112,11 @@ jobs:
           boomit-api-sha256-1="$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:$GITHUB_SHA" \
           --namespace=default
         
-        # Actualizar el label de versión en el deployment
+        # Actualizar el selector y los labels de versión en el deployment
         kubectl patch deployment $DEPLOYMENT_NAME \
           --namespace=default \
           --type='merge' \
-          -p='{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}, "spec":{"template":{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}}}}'
+          -p='{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}, "spec":{"selector":{"matchLabels":{"version":"${{ steps.version.outputs.version }}"}}, "template":{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}}}}'
         
         # Esperar a que el rollout se complete
         kubectl rollout status deployment/$DEPLOYMENT_NAME --namespace=default --timeout=300s
