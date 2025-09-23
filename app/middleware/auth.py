@@ -1,20 +1,19 @@
-﻿from functools import wraps
-import json
-from urllib.request import urlopen
-import jwt
-from fastapi import Request, Depends, Security
+﻿from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Callable, Any
+import jwt
 import logging
 
 from app.core.exceptions import AuthError
 from app.core.config import settings
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 security = HTTPBearer()
 
 
 def get_token_from_credentials(credentials: HTTPAuthorizationCredentials) -> str:
-    """Extrae y valida el token de las credenciales HTTP Bearer"""
+    """Extracts and validates the token from HTTP Bearer credentials"""
     if not credentials:
         raise AuthError(
             message="Authorization header is expected",
@@ -33,57 +32,68 @@ def get_token_from_credentials(credentials: HTTPAuthorizationCredentials) -> str
     return credentials.credentials
 
 
+# def verify_jwt_token(token: str) -> dict:
+#     """
+#     Verifies JWT token using HS256
+#     Only checks that the token is valid - does not verify specific content
+#     """
+#     try:
+#         # Decode and verify the token using HS256
+#         payload = jwt.decode(
+#             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+#         )
+
+#         logger.debug(f"Token verified successfully")
+#         return payload
+
+#     except jwt.ExpiredSignatureError:
+#         logger.warning("Token expired")
+#         raise AuthError(message="Token is expired", details={"code": "token_expired"})
+
+#     except jwt.InvalidTokenError as e:
+#         logger.warning(f"Invalid token: {str(e)}")
+#         raise AuthError(message="Invalid token", details={"code": "invalid_token"})
+
+#     except Exception as e:
+#         logger.error(f"Token verification error: {str(e)}")
+#         raise AuthError(
+#             message="Unable to parse authentication token",
+#             details={"code": "invalid_header"},
+#         )
+
 def verify_jwt_token(token: str) -> dict:
-    """Verifica y decodifica el JWT token"""
+    """
+    Verifies JWT token using HS256
+    Only checks that the token is valid - does not verify specific content
+    """
     try:
-        # Obtener las claves públicas de Auth0
-        jsonurl = urlopen(f"https://{settings.AUTH0_DOMAIN}/.well-known/jwks.json")
-        jwks = json.loads(jsonurl.read())
-
-        # Obtener el header no verificado para encontrar el kid
-        unverified_header = jwt.get_unverified_header(token)
-
-        # Buscar la clave pública correspondiente
-        public_key = None
-        for key in jwks["keys"]:
-            if key["kid"] == unverified_header["kid"]:
-                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
-
-        if not public_key:
-            raise AuthError(
-                message="Unable to find appropriate key",
-                details={"code": "invalid_header"},
-            )
-
-        # Decodificar y verificar el token
+        # Log the token for debugging (remove in production)
+        logger.debug(f"Attempting to verify token: {token[:20]}...{token[-20:]}")
+        logger.debug(f"Token length: {len(token)}")
+        
+        # Decode and verify the token using HS256
         payload = jwt.decode(
-            token,
-            public_key,
-            algorithms=settings.AUTH0_ALGORITHMS,
-            audience=settings.AUTH0_AUDIENCE,
-            issuer=f"https://{settings.AUTH0_DOMAIN}/",
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_aud": False}
         )
 
+        logger.debug(f"Token verified successfully")
         return payload
 
+    except jwt.InvalidSignatureError:
+        logger.warning("Invalid token signature")
+        raise AuthError(message="Invalid token signature", details={"code": "invalid_signature"})
+        
     except jwt.ExpiredSignatureError:
+        logger.warning("Token expired")
         raise AuthError(message="Token is expired", details={"code": "token_expired"})
-    except jwt.InvalidAudienceError:
-        raise AuthError(
-            message="Incorrect audience, please check the audience",
-            details={"code": "invalid_audience"},
-        )
-    except jwt.InvalidIssuerError:
-        raise AuthError(
-            message="Incorrect issuer, please check the issuer",
-            details={"code": "invalid_issuer"},
-        )
-    except jwt.InvalidTokenError:
-        raise AuthError(
-            message="Unable to parse authentication token",
-            details={"code": "invalid_header"},
-        )
+
+    except jwt.InvalidTokenError as e:
+        logger.warning(f"Invalid token: {str(e)}")
+        logger.warning(f"Token causing error: {token}")  # Log full token for debugging
+        raise AuthError(message="Invalid token", details={"code": "invalid_token"})
+
     except Exception as e:
+        logger.error(f"Token verification error: {str(e)}")
         raise AuthError(
             message="Unable to parse authentication token",
             details={"code": "invalid_header"},
@@ -93,7 +103,12 @@ def verify_jwt_token(token: str) -> dict:
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
-    """Dependency para obtener el usuario actual autenticado"""
+    """
+    Dependency to get the currently authenticated user
+
+    Returns:
+        dict: Payload of the verified JWT token
+    """
     token = get_token_from_credentials(credentials)
     payload = verify_jwt_token(token)
     return payload
