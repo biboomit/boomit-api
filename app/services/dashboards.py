@@ -17,7 +17,9 @@ class DashboardService:
         query = f"""
         SELECT 
             d.dash_id as dashboard_id,
+            e.empresa_id as empresa_id,
             p.nombre_producto as nombre_dashboard,
+            e.nombre_empresa as nombre_empresa,
             d.url,
             d.url_embebido as embed_url,
             d.Estado as estado,
@@ -28,6 +30,9 @@ class DashboardService:
         LEFT JOIN 
             `marketing-dwh-specs.DWH.DIM_PRODUCTO` p 
             ON d.producto_id = p.producto_id
+        LEFT JOIN
+            `marketing-dwh-specs.DWH.DIM_EMPRESA` e
+            ON p.empresa_id = e.empresa_id
         LIMIT {limit}
         OFFSET {skip};
         """

@@ -4,7 +4,9 @@ from datetime import datetime
 
 class DashboardResponse(BaseModel):
     dashboard_id: str = Field(..., description="Identificador único del dashboard")
+    empresa_id: str = Field(..., description="Identificador único de la empresa")
     nombre_dashboard: str = Field(..., description="Nombre del dashboard")
+    nombre_empresa: str = Field(..., description="Nombre de la empresa asociada al dashboard")
     url: str = Field(..., description="URL del dashboard")
     embed_url: str = Field(..., description="URL embebida del dashboard")
     estado: str = Field(..., description="Estado actual del dashboard")
@@ -17,7 +19,9 @@ class DashboardResponse(BaseModel):
         schema_extra = {
             "example": {
                 "dashboard_id": "db001",
+                "empresa_id": "emp123",
                 "nombre_dashboard": "Ventas Mensuales",
+                "nombre_empresa": "Empresa XYZ",
                 "url": "https://example.com/dashboards/db001",
                 "embed_url": "https://example.com/embed/db001",
                 "estado": "Activo",
@@ -34,7 +38,9 @@ class DashboardListResponse(BaseModel):
 
 class DashboardInternal(BaseModel):
     dashboard_id: str
+    empresa_id: str
     nombre_dashboard: str
+    nombre_empresa: str
     url: str
     embed_url: str
     estado: str
@@ -44,7 +50,9 @@ class DashboardInternal(BaseModel):
     def to_dict(self):
         return {
             "dashboard_id": self.dashboard_id,
+            "empresa_id": self.empresa_id,
             "nombre_dashboard": self.nombre_dashboard,
+            "nombre_empresa": self.nombre_empresa,
             "url": self.url,
             "embed_url": self.embed_url,
             "estado": self.estado,
