@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     PORT: int = Field(default=8000)
     DEFAULT_PER_PAGE: int = Field(default=20)
     MAX_PER_PAGE: int = Field(default=100)
+    DEFAULT_STATE: str = Field(default="ALL")
 
     # Security Configuration (as strings to avoid JSON parsing issues)
     ALLOWED_HOSTS: str = Field(default="*")
