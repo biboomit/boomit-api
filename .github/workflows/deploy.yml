@@ -24,6 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     
+    permissions:
+      contents: write
+      packages: write
+    
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -43,9 +47,13 @@ jobs:
       run: |-
         gcloud --quiet auth configure-docker $REGISTRY_LOCATION
 
+    - name: Install GKE Auth Plugin
+      run: |-
+        gcloud components install gke-gcloud-auth-plugin
+
     - name: Create BigQuery credentials file
       run: |
-        echo '${{ secrets.GCP_BIGQUERY_CREDENTIALS }}' > deployments/docker/marketing-dwh-specs-100b60190539.json
+        echo '${{ secrets.GCP_BIGQUERY_CREDENTIALS }}' > marketing-dwh-specs-100b60190539.json
 
     - name: Get next version
       id: version
@@ -103,12 +111,6 @@ jobs:
         kubectl set image deployment/$DEPLOYMENT_NAME \
           boomit-api-sha256-1="$REGISTRY_LOCATION/$PROJECT_ID/$IMAGE/$IMAGE:$GITHUB_SHA" \
           --namespace=default
-        
-        # Actualizar el label de versión en el deployment
-        kubectl patch deployment $DEPLOYMENT_NAME \
-          --namespace=default \
-          --type='merge' \
-          -p='{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}, "spec":{"template":{"metadata":{"labels":{"version":"${{ steps.version.outputs.version }}"}}}}}'
         
         # Esperar a que el rollout se complete
         kubectl rollout status deployment/$DEPLOYMENT_NAME --namespace=default --timeout=300s
