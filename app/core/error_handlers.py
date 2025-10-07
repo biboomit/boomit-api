@@ -76,7 +76,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 def register_exception_handlers(app):
-    """Registra todos los manejadores de excepciones en la aplicación"""
+    """Registers all exception handlers in the application"""
     app.add_exception_handler(AuthError, auth_error_handler)
     app.add_exception_handler(DatabaseConnectionError, database_error_handler)
     app.add_exception_handler(BoomitAPIException, boomit_exception_handler)
