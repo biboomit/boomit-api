@@ -26,7 +26,7 @@ async def auth_error_handler(request: Request, exc: AuthError):
 
 
 async def boomit_exception_handler(request: Request, exc: BoomitAPIException):
-    """Manejador para excepciones personalizadas de Boomit"""
+    """Handler for custom Boomit exceptions"""
     logger.error(
         f"Boomit exception on {request.url.path}: {exc.message}",
         extra={"details": exc.details},
