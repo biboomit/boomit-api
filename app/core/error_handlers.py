@@ -60,7 +60,7 @@ async def database_error_handler(request: Request, exc: DatabaseConnectionError)
 
 
 async def general_exception_handler(request: Request, exc: Exception):
-    """Manejador para excepciones no controladas"""
+    """Handler for unhandled exceptions"""
     logger.error(
         f"Unhandled exception on {request.url.path}: {str(exc)}", exc_info=True
     )
