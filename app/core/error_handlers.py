@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 async def auth_error_handler(request: Request, exc: AuthError):
-    """Manejador para errores de autenticación"""
+    """Handler for authentication errors"""
     logger.warning(
         f"Auth error on {request.url.path}: {exc.message}",
         extra={"details": exc.details},
