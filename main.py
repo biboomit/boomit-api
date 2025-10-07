@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.config import settings
+from app.core.error_handlers import register_exception_handlers
 from app.middleware.timing import TimingMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.api.v1.router import api_router
@@ -41,6 +42,8 @@ app = FastAPI(
     openapi_url=settings.OPENAPI_URL if settings.docs_enabled else None,
     lifespan=lifespan,
 )
+
+register_exception_handlers(app)
 
 # Security middleware
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.get_allowed_hosts())

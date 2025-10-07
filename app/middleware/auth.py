@@ -61,6 +61,7 @@ def get_token_from_credentials(credentials: HTTPAuthorizationCredentials) -> str
 #             details={"code": "invalid_header"},
 #         )
 
+
 def verify_jwt_token(token: str) -> dict:
     """
     Verifies JWT token using HS256
@@ -70,19 +71,31 @@ def verify_jwt_token(token: str) -> dict:
         # Log the token for debugging (remove in production)
         logger.debug(f"Attempting to verify token: {token[:20]}...{token[-20:]}")
         logger.debug(f"Token length: {len(token)}")
-        
+
         # Decode and verify the token using HS256
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_aud": False}
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"verify_aud": False},
+            leeway=10,
         )
 
         logger.debug(f"Token verified successfully")
         return payload
 
+    except jwt.ImmatureSignatureError:
+        logger.warning("Token issued in the future (iat claim)")
+        raise AuthError(
+            message="Token not yet valid", details={"code": "token_not_yet_valid"}
+        )
+
     except jwt.InvalidSignatureError:
         logger.warning("Invalid token signature")
-        raise AuthError(message="Invalid token signature", details={"code": "invalid_signature"})
-        
+        raise AuthError(
+            message="Invalid token signature", details={"code": "invalid_signature"}
+        )
+
     except jwt.ExpiredSignatureError:
         logger.warning("Token expired")
         raise AuthError(message="Token is expired", details={"code": "token_expired"})
