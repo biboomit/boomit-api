@@ -43,7 +43,7 @@ async def boomit_exception_handler(request: Request, exc: BoomitAPIException):
 
 
 async def database_error_handler(request: Request, exc: DatabaseConnectionError):
-    """Manejador específico para errores de base de datos"""
+    """Specific handler for database errors"""
     logger.critical(
         f"Database error on {request.url.path}: {exc.message}",
         extra={"details": exc.details},
