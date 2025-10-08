@@ -1,4 +1,5 @@
 from typing import List, Optional
+from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
 from app.schemas.campaigns import CampaignResponse, CampaignInternal
 from datetime import datetime
@@ -37,8 +38,13 @@ class CampaignService:
         """
 
         where_clause = ""
+        query_params = []
+
         if state.lower() in state_mapping:
-            where_clause = f"WHERE estado_campana = '{state_mapping[state.lower()]}'"
+            where_clause = "WHERE estado_campana = @estado"
+            query_params.append(
+                bigquery.ScalarQueryParameter("estado", "STRING", state_mapping[state.lower()])
+            )
         elif state.lower() != "all":
             raise ValueError(
                 f"Estado inválido: {state}. Debe ser 'all', 'active' o 'paused'"
@@ -48,9 +54,14 @@ class CampaignService:
         {base_query}
         {where_clause}
         ORDER BY fecha_creacion DESC
-        LIMIT {limit}
-        OFFSET {skip}
+        LIMIT @limit
+        OFFSET @skip
         """
+
+        query_params.extend([
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+            bigquery.ScalarQueryParameter("skip", "INT64", skip)
+        ])
 
         count_query = f"""
         SELECT COUNT(*) as total
@@ -59,11 +70,15 @@ class CampaignService:
         """
 
         try:
-            query_job = self.client.query(data_query)
+            job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+            query_job = self.client.query(data_query, job_config=job_config)
             results = query_job.result()
             campaigns = [CampaignInternal(**dict(row)) for row in results]
 
-            count_job = self.client.query(count_query)
+            # Para el count, solo usar el parámetro de estado si existe
+            count_params = [p for p in query_params if p.name == "estado"]
+            count_job_config = bigquery.QueryJobConfig(query_parameters=count_params) if count_params else None
+            count_job = self.client.query(count_query, job_config=count_job_config)
             count_result = count_job.result()
             total_count = list(count_result)[0].total
 
