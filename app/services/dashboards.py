@@ -45,7 +45,20 @@ class DashboardService:
                 bigquery.ScalarQueryParameter("company_id", "STRING", company_id)
             )
 
-        query = f"""
+        count_query = f"""
+        SELECT COUNT(*) as total
+        FROM
+            `marketing-dwh-specs.DWH.DIM_MAESTRO_DASH` d
+        LEFT JOIN
+            `marketing-dwh-specs.DWH.DIM_PRODUCTO` p
+            ON d.producto_id = p.producto_id
+        LEFT JOIN
+            `marketing-dwh-specs.DWH.DIM_EMPRESA` e
+            ON p.empresa_id = e.empresa_id
+        {where_clause}
+        """
+
+        data_query = f"""
         {base_query}
         {where_clause}
         ORDER BY d.fecha_creacion DESC
@@ -53,24 +66,20 @@ class DashboardService:
         OFFSET @skip
         """
 
-        query_params.extend(
-            [
+        try:
+            count_job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+            count_job = self.client.query(count_query, job_config=count_job_config)
+            count_result = list(count_job.result())
+            total_count = count_result[0].total if count_result else 0
+            
+            data_params = query_params + [
                 bigquery.ScalarQueryParameter("limit", "INT64", limit),
                 bigquery.ScalarQueryParameter("skip", "INT64", skip),
             ]
-        )
-
-        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
-
-        try:
-            query_job = self.client.query(query, job_config=job_config)
-            results = query_job.result()
+            data_job_config = bigquery.QueryJobConfig(query_parameters=data_params)
+            data_job = self.client.query(data_query, job_config=data_job_config)
+            results = data_job.result()
             dashboards = [DashboardInternal(**dict(row)) for row in results]
-
-            count_query = f"SELECT COUNT(*) as total FROM `{self.table_id}`"
-            count_job = self.client.query(count_query)
-            count_result = count_job.result()
-            total_count = list(count_result)[0].total
 
             return dashboards, total_count
         except Exception as e:
