@@ -1,4 +1,5 @@
 from typing import List, Optional
+from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
 from app.schemas.dashboards import DashboardResponse, DashboardInternal
 from datetime import datetime
@@ -11,11 +12,11 @@ class DashboardService:
         self.table_id = bigquery_config.get_table_id("DIM_MAESTRO_DASH")
 
     async def get_dashboards(
-        self, skip: int = 0, limit: int = 10
+        self, skip: int = 0, limit: int = 10, company_id: Optional[str] = None
     ) -> tuple[List[DashboardInternal], int]:
         """Obtener todos los dashboards con paginación"""
-        query = f"""
-        SELECT 
+        base_query = """
+        SELECT
             d.dash_id as dashboard_id,
             e.empresa_id as empresa_id,
             p.nombre_producto as nombre_dashboard,
@@ -25,20 +26,44 @@ class DashboardService:
             d.Estado as estado,
             d.fecha_creacion,
             d.fecha_actualizacion
-        FROM 
+        FROM
             `marketing-dwh-specs.DWH.DIM_MAESTRO_DASH` d
-        LEFT JOIN 
-            `marketing-dwh-specs.DWH.DIM_PRODUCTO` p 
+        LEFT JOIN
+            `marketing-dwh-specs.DWH.DIM_PRODUCTO` p
             ON d.producto_id = p.producto_id
         LEFT JOIN
             `marketing-dwh-specs.DWH.DIM_EMPRESA` e
             ON p.empresa_id = e.empresa_id
-        LIMIT {limit}
-        OFFSET {skip};
         """
 
+        where_clause = ""
+        query_params = []
+
+        if company_id:
+            where_clause = "WHERE e.empresa_id = @company_id"
+            query_params.append(
+                bigquery.ScalarQueryParameter("company_id", "STRING", company_id)
+            )
+
+        query = f"""
+        {base_query}
+        {where_clause}
+        ORDER BY d.fecha_creacion DESC
+        LIMIT @limit
+        OFFSET @skip
+        """
+
+        query_params.extend(
+            [
+                bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                bigquery.ScalarQueryParameter("skip", "INT64", skip),
+            ]
+        )
+
+        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+
         try:
-            query_job = self.client.query(query)
+            query_job = self.client.query(query, job_config=job_config)
             results = query_job.result()
             dashboards = [DashboardInternal(**dict(row)) for row in results]
 
