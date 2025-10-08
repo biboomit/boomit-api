@@ -30,7 +30,7 @@ async def get_dashboards(
     Args:
         page (int, optional): Page number. Defaults to Query(1, ge=1, description="Page number").
         per_page (int, optional): Number of items per page. Defaults to Query(settings.DEFAULT_PER_PAGE, ge=1, le=settings.MAX_PER_PAGE, description="Number of items per page").
-        company_id (str, optional): Company ID to filter dashboards. Defaults to Query(..., description="Company ID").
+        company_id (str, optional): Company ID to filter dashboards. Defaults to None.
         service (DashboardService, optional): Dashboard service instance. Defaults to Depends(get_dashboard_service).
     """
     try:
