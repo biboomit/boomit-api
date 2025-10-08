@@ -21,7 +21,7 @@ async def get_dashboards(
         le=settings.MAX_PER_PAGE,
         description="Number of items per page",
     ),
-    company_id: str = Query(..., description="Company ID"),
+    company_id: str = Query(None, description="Company ID"),
     service: DashboardService = Depends(get_dashboard_service),
     current_user: dict = Depends(get_current_user)
 ):
