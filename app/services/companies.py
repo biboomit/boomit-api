@@ -1,4 +1,5 @@
 from typing import List, Optional
+from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
 from app.schemas.companies import CompanyResponse, CompanyInternal
 from datetime import datetime
@@ -28,16 +29,23 @@ class CompanyService:
             fecha_actualizacion
         FROM `{self.table_id}`
         ORDER BY fecha_creacion DESC
-        LIMIT {limit}
-        OFFSET {skip}
+        LIMIT @limit
+        OFFSET @skip
         """
 
+        query_params = [
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+            bigquery.ScalarQueryParameter("skip", "INT64", skip)
+        ]
+
+        count_query = f"SELECT COUNT(*) as total FROM `{self.table_id}`"
+
         try:
-            query_job = self.client.query(query)
+            job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+            query_job = self.client.query(query, job_config=job_config)
             results = query_job.result()
             companies = [CompanyInternal(**dict(row)) for row in results]
 
-            count_query = f"SELECT COUNT(*) as total FROM `{self.table_id}`"
             count_job = self.client.query(count_query)
             count_result = count_job.result()
             total_count = list(count_result)[0].total
