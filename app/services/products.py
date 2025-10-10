@@ -12,7 +12,7 @@ class ProductService:
         self.table_id = bigquery_config.get_table_id("DIM_PRODUCTO")
 
     async def get_products(
-        self, skip: int = 0, limit: int = 10, state: str = "all"
+        self, skip: int = 0, limit: int = 10, state: str = "all", company_id: Optional[str] = None
     ) -> tuple[List[ProductInternal], int]:
         """Obtener todos los productos con paginación"""
         state_mapping = {
@@ -36,15 +36,24 @@ class ProductService:
         where_clause = ""
         query_params = []
         
-        if state.lower() in state_mapping:
-            where_clause = "WHERE estado_producto = @estado"
-            query_params.append(
-                bigquery.ScalarQueryParameter("estado", "STRING", state_mapping[state.lower()])
-            )
-        elif state.lower() != "all":
-            raise ValueError(
-                f"Estado inválido: {state}. Debe ser 'all', 'active' o 'discontinued'"
-            )
+        if company_id or state.lower() != "all":
+            where_conditions = []
+            if state.lower() in state_mapping:
+                where_conditions.append("estado_producto = @estado")
+                query_params.append(
+                    bigquery.ScalarQueryParameter("estado", "STRING", state_mapping[state.lower()])
+                )
+            if company_id:
+                where_conditions.append("empresa_id = @empresa_id")
+                query_params.append(
+                    bigquery.ScalarQueryParameter("empresa_id", "STRING", company_id)
+                )
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
+            elif state.lower() != "all":
+                raise ValueError(
+                    f"Estado inválido: {state}. Debe ser 'all', 'active' o 'discontinued'"
+                )
             
         data_query = f"""
         {base_query}
@@ -71,7 +80,7 @@ class ProductService:
             results = query_job.result()
             products = [ProductInternal(**dict(row)) for row in results]
 
-            count_params = [p for p in query_params if p.name == "estado"]
+            count_params = [p for p in query_params if p.name in ("estado", "empresa_id")]
             count_job_config = bigquery.QueryJobConfig(query_parameters=count_params)
             count_query_job = self.client.query(count_query, job_config=count_job_config)
             count_result = count_query_job.result()
