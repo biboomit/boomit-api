@@ -12,13 +12,18 @@ class DashboardService:
         self.table_id = bigquery_config.get_table_id("DIM_MAESTRO_DASH")
 
     async def get_dashboards(
-        self, skip: int = 0, limit: int = 10, company_id: Optional[str] = None
+        self,
+        skip: int = 0,
+        limit: int = 10,
+        company_id: Optional[str] = None,
+        product_id: Optional[str] = None,
     ) -> tuple[List[DashboardInternal], int]:
         """Obtener todos los dashboards con paginación"""
         base_query = """
         SELECT
             d.dash_id as dashboard_id,
             e.empresa_id as empresa_id,
+            p.producto_id as producto_id,
             p.nombre_producto as nombre_dashboard,
             e.nombre_empresa as nombre_empresa,
             d.url,
@@ -39,11 +44,20 @@ class DashboardService:
         where_clause = ""
         query_params = []
 
-        if company_id:
-            where_clause = "WHERE e.empresa_id = @company_id"
-            query_params.append(
-                bigquery.ScalarQueryParameter("company_id", "STRING", company_id)
-            )
+        if product_id or company_id:
+            where_conditions = []
+            if company_id:
+                where_conditions.append("e.empresa_id = @company_id")
+                query_params.append(
+                    bigquery.ScalarQueryParameter("company_id", "STRING", company_id)
+                )
+            if product_id:
+                where_conditions.append("p.producto_id = @product_id")
+                query_params.append(
+                    bigquery.ScalarQueryParameter("product_id", "STRING", product_id)
+                )
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
 
         count_query = f"""
         SELECT COUNT(*) as total
@@ -71,7 +85,7 @@ class DashboardService:
             count_job = self.client.query(count_query, job_config=count_job_config)
             count_result = list(count_job.result())
             total_count = count_result[0].total if count_result else 0
-            
+
             data_params = query_params + [
                 bigquery.ScalarQueryParameter("limit", "INT64", limit),
                 bigquery.ScalarQueryParameter("skip", "INT64", skip),
