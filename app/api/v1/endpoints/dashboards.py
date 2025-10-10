@@ -22,6 +22,7 @@ async def get_dashboards(
         description="Number of items per page",
     ),
     company_id: str = Query(None, description="Company ID"),
+    product_id: str = Query(None, description="Product ID"),
     service: DashboardService = Depends(get_dashboard_service),
     current_user: dict = Depends(get_current_user)
 ):
@@ -31,11 +32,12 @@ async def get_dashboards(
         page (int, optional): Page number. Defaults to Query(1, ge=1, description="Page number").
         per_page (int, optional): Number of items per page. Defaults to Query(settings.DEFAULT_PER_PAGE, ge=1, le=settings.MAX_PER_PAGE, description="Number of items per page").
         company_id (str, optional): Company ID to filter dashboards. Defaults to None.
+        product_id (str, optional): Product ID to filter dashboards. Defaults to None.
         service (DashboardService, optional): Dashboard service instance. Defaults to Depends(get_dashboard_service).
     """
     try:
         skip = (page - 1) * per_page
-        dashboards, total = await service.get_dashboards(skip=skip, limit=per_page, company_id=company_id)
+        dashboards, total = await service.get_dashboards(skip=skip, limit=per_page, company_id=company_id, product_id=product_id)
 
         dashboard_responses = [DashboardResponse(**d.to_dict()) for d in dashboards]
 

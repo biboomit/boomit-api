@@ -5,6 +5,7 @@ from datetime import datetime
 class DashboardResponse(BaseModel):
     dashboard_id: str = Field(..., description="Identificador único del dashboard")
     empresa_id: str = Field(..., description="Identificador único de la empresa")
+    producto_id: str = Field(..., description="Identificador único del producto")
     nombre_dashboard: str = Field(..., description="Nombre del dashboard")
     nombre_empresa: str = Field(..., description="Nombre de la empresa asociada al dashboard")
     url: str = Field(..., description="URL del dashboard")
@@ -39,6 +40,7 @@ class DashboardListResponse(BaseModel):
 class DashboardInternal(BaseModel):
     dashboard_id: str
     empresa_id: str
+    producto_id: str
     nombre_dashboard: str
     nombre_empresa: str
     url: str
@@ -51,6 +53,7 @@ class DashboardInternal(BaseModel):
         return {
             "dashboard_id": self.dashboard_id,
             "empresa_id": self.empresa_id,
+            "producto_id": self.producto_id,
             "nombre_dashboard": self.nombre_dashboard,
             "nombre_empresa": self.nombre_empresa,
             "url": self.url,
