@@ -10,7 +10,7 @@ from app.middleware.auth import get_current_user
 router = APIRouter()
 
 
-def get_company_service() -> ProductService:
+def get_product_service() -> ProductService:
     return product_service
 
 
@@ -28,7 +28,7 @@ async def get_products(
         description="Estado del producto",
         regex="^(?i)(active|discontinued|all)$",
     ),
-    service: ProductService = Depends(get_company_service),
+    service: ProductService = Depends(get_product_service),
     current_user: dict = Depends(get_current_user),
 ):
     """Get a list of products with pagination.
@@ -36,7 +36,7 @@ async def get_products(
     Args:
         page (int, optional): Page number. Defaults to Query(1, ge=1, description="Page number").
         per_page (int, optional): Number of items per page. Defaults to Query(settings.DEFAULT_PER_PAGE, ge=1, le=settings.MAX_PER_PAGE, description="Number of items per page").
-        service (productService, optional): Product service instance. Defaults to Depends(get_company_service).
+        service (ProductService, optional): Product service instance. Defaults to Depends(get_product_service).
     """
     try:
         skip = (page - 1) * per_page

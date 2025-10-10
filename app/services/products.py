@@ -36,10 +36,7 @@ class ProductService:
         where_clause = ""
         query_params = []
         
-        print("State parameter received:", state)
-        
         if state.lower() in state_mapping:
-            print("Filtering by state:", state)
             where_clause = "WHERE estado_producto = @estado"
             query_params.append(
                 bigquery.ScalarQueryParameter("estado", "STRING", state_mapping[state.lower()])
