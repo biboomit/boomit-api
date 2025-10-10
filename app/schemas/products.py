@@ -47,15 +47,3 @@ class ProductInternal(BaseModel):
     fecha_creacion: datetime
     fecha_actualizacion: Optional[datetime]
     
-    def to_dict(self):
-        return {
-            "producto_id": self.producto_id,
-            "empresa_id": self.empresa_id,
-            "nombre_producto": self.nombre_producto,
-            "categoria_producto": self.categoria_producto,
-            "estado_producto": self.estado_producto,
-            "fecha_lanzamiento": self.fecha_lanzamiento,
-            "fecha_fin": self.fecha_fin,
-            "fecha_creacion": self.fecha_creacion,
-            "fecha_actualizacion": self.fecha_actualizacion
-        }
