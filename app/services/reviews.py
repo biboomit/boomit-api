@@ -79,7 +79,7 @@ class ReviewService:
 
                 grouped_reviews[app_id_key][source_key].append(review)
 
-            # Convertir a lista de ReviewResponse
+            # Convert to ReviewResponse list
             review_responses = []
             for app_id_key, sources in grouped_reviews.items():
                 for source_key, reviews_list in sources.items():
