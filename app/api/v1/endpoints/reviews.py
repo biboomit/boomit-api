@@ -27,11 +27,14 @@ async def get_reviews(
     """Get a list of reviews grouped by app_id and source with pagination.
 
     Args:
-        page (int, optional): Page number. Defaults to Query(1, ge=1, description="Page number").
-        per_page (int, optional): Number of items per page. Defaults to Query( settings.DEFAULT_PER_PAGE, ge=1, le=settings.MAX_PER_PAGE, description="Number of items per page", ).
-        app_id (str, optional): App ID. Defaults to Query(None, description="App ID").
-        service (ReviewService, optional): Review service. Defaults to Depends(get_review_service).
-        current_user (dict, optional): Current user. Defaults to Depends(get_current_user).
+        page (int): The page number for pagination. Must be >= 1.
+        per_page (int): Number of items per page. Must be between 1 and the maximum allowed per page.
+        app_id (str, optional): The ID of the app to filter reviews by. If None, reviews for all apps are returned.
+        service (ReviewService): The review service instance used to fetch reviews.
+        current_user (dict): The current authenticated user.
+
+    Returns:
+        ReviewListResponse: An object containing the list of reviews, total count, current page, and items per page.
     """
     try:
         skip = (page - 1) * per_page
