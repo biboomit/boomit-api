@@ -61,7 +61,7 @@ class ReviewService:
             data_results = data_job.result()
             count_results = count_job.result()
 
-            # Agrupar reviews por app_id y source
+            # Group reviews by app_id and source
             grouped_reviews = defaultdict(lambda: defaultdict(list))
 
             for row in data_results:
