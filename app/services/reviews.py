@@ -57,7 +57,7 @@ class ReviewService:
                 else:
                     having_conditions.append("COUNT(*) = 0")
 
-            logger.info(f"Where conditions before joining: {where_conditions}")
+            logger.debug(f"Where conditions before joining: {where_conditions}")
 
             if where_conditions:
                 where_clause = "WHERE " + " AND ".join(where_conditions)
