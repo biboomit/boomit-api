@@ -37,7 +37,7 @@ class ReviewService:
         having_clause = ""
         query_params = []
 
-        print(f"Filters received - source: {source}, has_reviews: {has_reviews}")
+        logger.debug(f"Filters received - source: {source}, has_reviews: {has_reviews}")
 
         if source or has_reviews is not None:
             where_conditions = []
