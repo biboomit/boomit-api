@@ -1,9 +1,141 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
 
+class ReviewSourceResponse(BaseModel):
+    """Response model for review source with aggregated metadata"""
+
+    app_id: str = Field(..., description="App ID associated with the reviews")
+    source: str = Field(..., description="Source of the reviews (Android/iOS)")
+    total_reviews: int = Field(
+        ..., ge=0, description="Total number of reviews for this app"
+    )
+    average_rating: float = Field(
+        ..., ge=0.0, le=5.0, description="Average rating across all reviews"
+    )
+    first_review_date: datetime = Field(..., description="Date of the first review")
+    last_review_date: datetime = Field(
+        ..., description="Date of the most recent review"
+    )
+
+    @field_validator("source")
+    @classmethod
+    def normalize_source(cls, v: str) -> str:
+        """Normalize source to lowercase"""
+        return v.lower() if v else v
+
+    class Config:
+        from_attributes = True
+        orm_mode = True
+        schema_extra = {
+            "example": {
+                "app_id": "com.example.app",
+                "source": "android",
+                "total_reviews": 250,
+                "average_rating": 4.2,
+                "first_review_date": "2023-01-01T08:00:00Z",
+                "last_review_date": "2023-10-15T10:30:00Z",
+            }
+        }
+
+
+class ReviewSourceListResponse(BaseModel):
+    """Paginated list of review sources"""
+
+    sources: list[ReviewSourceResponse] = Field(
+        ..., description="List of review sources with metadata"
+    )
+    total: int = Field(..., ge=0, description="Total number of sources")
+    page: int = Field(..., ge=1, description="Current page number")
+    per_page: int = Field(..., ge=1, description="Number of items per page")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "sources": [
+                    {
+                        "app_id": "com.example.app",
+                        "source": "android",
+                        "total_reviews": 250,
+                        "average_rating": 4.2,
+                        "first_review_date": "2023-01-01T08:00:00Z",
+                        "last_review_date": "2023-10-15T10:30:00Z",
+                    }
+                ],
+                "total": 5,
+                "page": 1,
+                "per_page": 10,
+            }
+        }
+
+
+class Review(BaseModel):
+    """Individual review model"""
+
+    review_id: str = Field(..., description="Unique identifier for the review history")
+    rating: int = Field(..., ge=1, le=5, description="Rating score between 1 and 5")
+    comment: str = Field(..., description="Comment content of the review")
+    date: datetime = Field(..., description="Date when the review was made")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "review_id": "rev123",
+                "rating": 5,
+                "comment": "Great app!",
+                "date": "2023-10-01T12:34:56Z",
+            }
+        }
+
+
+class PaginatedReviewsResponse(BaseModel):
+    """Paginated list of reviews for a specific app"""
+
+    app_id: str = Field(..., description="App ID associated with the reviews")
+    source: str = Field(..., description="Source of the reviews (Android/iOS)")
+    reviews: list[Review] = Field(..., description="List of reviews")
+    total: int = Field(..., ge=0, description="Total number of reviews for this app")
+    page: int = Field(..., ge=1, description="Current page number")
+    per_page: int = Field(..., ge=1, description="Number of items per page")
+
+    @field_validator("source")
+    @classmethod
+    def normalize_source(cls, v: str) -> str:
+        """Normalize source to lowercase"""
+        return v.lower() if v else v
+
+    class Config:
+        from_attributes = True
+        orm_mode = True
+        schema_extra = {
+            "example": {
+                "app_id": "com.example.app",
+                "source": "android",
+                "reviews": [
+                    {
+                        "review_id": "rev123",
+                        "rating": 5,
+                        "comment": "Great app!",
+                        "date": "2023-10-01T12:34:56Z",
+                    },
+                    {
+                        "review_id": "rev124",
+                        "rating": 4,
+                        "comment": "Good but needs improvement.",
+                        "date": "2023-10-02T14:20:00Z",
+                    },
+                ],
+                "total": 250,
+                "page": 1,
+                "per_page": 20,
+            }
+        }
+
+
 class ReviewResponse(BaseModel):
+    """Legacy response model - DEPRECATED: Use PaginatedReviewsResponse instead"""
+
     app_id: str = Field(..., description="App ID associated with the review")
     source: str = Field(..., description="Source of the review")
     reviews: list["Review"] = Field(..., description="List of reviews")
@@ -31,13 +163,6 @@ class ReviewResponse(BaseModel):
                 ],
             }
         }
-
-
-class Review(BaseModel):
-    review_id: str = Field(..., description="Unique identifier for the review history")
-    rating: int = Field(..., ge=1, le=5, description="Rating score between 1 and 5")
-    comment: str = Field(..., description="Comment content of the review")
-    date: datetime = Field(..., description="Date when the review was made")
 
 
 class ReviewListResponse(BaseModel):
