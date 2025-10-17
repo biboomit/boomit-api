@@ -49,7 +49,7 @@ class ReviewService:
                     bigquery.ScalarQueryParameter("source", "STRING", source.lower())
                 )
 
-            logger.info(f"Applying has_reviews filter: {has_reviews}")
+            logger.debug(f"Applying has_reviews filter: {has_reviews}")
 
             if has_reviews is not None:
                 if has_reviews:
