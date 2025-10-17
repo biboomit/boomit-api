@@ -65,7 +65,6 @@ class ReviewService:
             if having_conditions:
                 having_clause = "HAVING " + " AND ".join(having_conditions)
 
-
         data_query = f"""
         SELECT
             app_id,
