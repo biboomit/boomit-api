@@ -328,7 +328,7 @@ class ReviewService:
             data_results = data_job.result()
             count_results = count_job.result()
 
-            # Agrupar reviews por app_id y source
+            # Group reviews by app_id and source
             grouped_reviews = defaultdict(lambda: defaultdict(list))
 
             for row in data_results:
@@ -336,7 +336,7 @@ class ReviewService:
                 app_id_key = review_data["app_id"]
                 source_key = review_data["source"]
 
-                # Crear objeto Review con el formato esperado
+                # Create Review object with expected format
                 review = Review(
                     review_id=review_data["review_historico_id"],
                     rating=review_data["score"],
