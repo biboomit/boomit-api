@@ -377,10 +377,12 @@ class ReviewService:
 
         Returns:
             Tuple containing:
-            - metrics: Dictionary with average_rating and total_reviews
+            - metrics: Dictionary with keys:
+                - average_rating: The average rating value (float or None)
+                - total_reviews: The total number of reviews (int)
+                - reviews_by_score: Dictionary mapping score to count of reviews
             - time_frame: Dictionary with date_from and date_to if provided
             - source: The source of the reviews
-            - reviews_by_score: Dictionary mapping score to count of reviews
         """
         base_query = f"""
         SELECT
