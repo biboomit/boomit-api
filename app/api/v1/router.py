@@ -9,4 +9,4 @@ api_router.include_router(companies.router, prefix="/companies", tags=["companie
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(campaigns.router, prefix="/campaigns", tags=["campaigns"])
 api_router.include_router(product.router, prefix="/products", tags=["products"])
-api_router.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
+api_router.include_router(reviews.router, prefix="/apps", tags=["apps"])

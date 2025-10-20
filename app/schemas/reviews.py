@@ -193,3 +193,28 @@ class ReviewInternal(BaseModel):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+
+class MetricsResponse(BaseModel):
+    """Response model for app metrics"""
+
+    app_id: str = Field(..., description="App ID associated with the metrics")
+    source: str = Field(..., description="Source of the reviews (Android/iOS)")
+    metrics: dict = Field(..., description="Metrics data for the specified app")
+    time_frame: dict = Field(..., description="Time frame for the metrics")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "app_id": "com.example.app",
+                "source": "android",
+                "metrics": {
+                    "total_reviews": 250,
+                    "average_rating": 4.2,
+                    "reviews_by_score": {5: 150, 4: 50, 3: 30, 2: 15, 1: 5},
+                },
+                "time_frame": {
+                    "date_from": "2023-01-01T00:00:00Z",
+                    "date_to": "2023-10-15T23:59:59Z",
+                },
+            }
+        }
