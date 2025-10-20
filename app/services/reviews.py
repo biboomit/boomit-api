@@ -365,13 +365,22 @@ class ReviewService:
         app_id: str,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
-    ) -> tuple[dict[str, int | float | None], dict[str, Optional[str]], str]:
+    ) -> tuple[
+        dict[str, int | float | None], dict[str, Optional[str]], str
+    ]:
         """Get metrics for a specific app.
 
         Args:
             app_id: App ID to fetch metrics for
             date_from: Start date for metrics
             date_to: End date for metrics
+
+        Returns:
+            Tuple containing:
+            - metrics: Dictionary with average_rating and total_reviews
+            - time_frame: Dictionary with date_from and date_to if provided
+            - source: The source of the reviews
+            - reviews_by_score: Dictionary mapping score to count of reviews
         """
         base_query = f"""
         SELECT
@@ -382,38 +391,58 @@ class ReviewService:
         WHERE app_id = @app_id
         """
 
-        time_frame = {}
+        score_query = f"""
+        SELECT
+            score,
+            COUNT(*) as review_count
+        FROM `{self.table_id}`
+        WHERE app_id = @app_id
+        """
 
+        time_frame = {}
         query_params = [bigquery.ScalarQueryParameter("app_id", "STRING", app_id)]
 
         if date_from is not None:
-            base_query += " AND fecha >= @date_from"
+            date_filter = " AND fecha >= @date_from"
+            base_query += date_filter
+            score_query += date_filter
             query_params.append(
                 bigquery.ScalarQueryParameter("date_from", "DATE", date_from.date())
             )
             time_frame["date_from"] = date_from.isoformat()
 
         if date_to is not None:
-            base_query += " AND fecha <= @date_to"
+            date_filter = " AND fecha <= @date_to"
+            base_query += date_filter
+            score_query += date_filter
             query_params.append(
                 bigquery.ScalarQueryParameter("date_to", "DATE", date_to.date())
             )
             time_frame["date_to"] = date_to.isoformat()
 
         base_query += " GROUP BY source"
+        score_query += " GROUP BY score ORDER BY score"
+
         job_config = bigquery.QueryJobConfig(query_parameters=query_params)
 
         try:
             data_job = self.client.query(base_query, job_config=job_config)
             data_results = data_job.result()
-
             rows = list(data_results)
+
+            score_job = self.client.query(score_query, job_config=job_config)
+            score_results = score_job.result()
+
+            reviews_by_score = {
+                row["score"]: row["review_count"] for row in score_results
+            }
+
             if not rows:
                 metrics = {
                     "average_rating": None,
                     "total_reviews": 0,
                 }
-                return metrics, time_frame, None
+                return metrics, time_frame, "unknown"
 
             row = rows[0]
             metrics = {
@@ -423,9 +452,11 @@ class ReviewService:
                     else None
                 ),
                 "total_reviews": row["total_reviews"],
+                "reviews_by_score": reviews_by_score,
             }
 
             return metrics, time_frame, row["source"]
+
         except Exception as e:
             raise DatabaseConnectionError(f"Error querying the database: {e}")
 
