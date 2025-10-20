@@ -360,5 +360,67 @@ class ReviewService:
         except Exception as e:
             raise DatabaseConnectionError(f"Error querying the database: {e}")
 
+    async def get_metrics(
+        self,
+        app_id: str,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> tuple[dict[str, int | float | None], dict[str, Optional[str]], str]:
+        """Get metrics for a specific app.
+
+        Args:
+            app_id: App ID to fetch metrics for
+            date_from: Start date for metrics
+            date_to: End date for metrics
+        """
+        base_query = f"""
+        SELECT
+            source,
+            AVG(score) as average_rating,
+            count(*) as total_reviews
+        FROM `{self.table_id}`
+        WHERE app_id = @app_id
+        """
+
+        time_frame = {}
+
+        query_params = [bigquery.ScalarQueryParameter("app_id", "STRING", app_id)]
+
+        if date_from is not None:
+            base_query += " AND fecha >= @date_from"
+            query_params.append(
+                bigquery.ScalarQueryParameter("date_from", "DATE", date_from.date())
+            )
+            time_frame["date_from"] = date_from.isoformat()
+
+        if date_to is not None:
+            base_query += " AND fecha <= @date_to"
+            query_params.append(
+                bigquery.ScalarQueryParameter("date_to", "DATE", date_to.date())
+            )
+            time_frame["date_to"] = date_to.isoformat()
+
+        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+        
+        base_query += " GROUP BY source"
+
+        try:
+            data_job = self.client.query(base_query, job_config=job_config)
+            data_results = data_job.result()
+
+            row = list(data_results)[0]
+            metrics = {
+                "average_rating": (
+                    round(row["average_rating"], 2)
+                    if row["average_rating"] is not None
+                    else None
+                ),
+                "total_reviews": row["total_reviews"],
+            }
+
+            return metrics, time_frame, row["source"]
+        except Exception as e:
+            raise DatabaseConnectionError(f"Error querying the database: {e}")
+
 
 review_service = ReviewService()
