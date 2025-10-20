@@ -210,11 +210,7 @@ class MetricsResponse(BaseModel):
                 "metrics": {
                     "total_reviews": 250,
                     "average_rating": 4.2,
-                    "five_star_reviews": 150,
-                    "four_star_reviews": 50,
-                    "three_star_reviews": 30,
-                    "two_star_reviews": 15,
-                    "one_star_reviews": 5,
+                    "reviews_by_score": {5: 150, 4: 50, 3: 30, 2: 15, 1: 5},
                 },
                 "time_frame": {
                     "date_from": "2023-01-01T00:00:00Z",
