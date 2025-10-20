@@ -194,8 +194,6 @@ async def get_metrics(
     Returns:
         MetricsResponse: The metrics for the specified app.
     """
-    if not app_id:
-        raise HTTPException(status_code=400, detail="app_id is required")
     
     if date_from is not None and date_to is not None and date_from > date_to:
         raise HTTPException(
