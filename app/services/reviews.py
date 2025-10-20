@@ -400,9 +400,8 @@ class ReviewService:
             )
             time_frame["date_to"] = date_to.isoformat()
 
-        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
-        
         base_query += " GROUP BY source"
+        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
 
         try:
             data_job = self.client.query(base_query, job_config=job_config)
