@@ -408,7 +408,15 @@ class ReviewService:
             data_job = self.client.query(base_query, job_config=job_config)
             data_results = data_job.result()
 
-            row = list(data_results)[0]
+            rows = list(data_results)
+            if not rows:
+                metrics = {
+                    "average_rating": None,
+                    "total_reviews": 0,
+                }
+                return metrics, time_frame, None
+
+            row = rows[0]
             metrics = {
                 "average_rating": (
                     round(row["average_rating"], 2)
