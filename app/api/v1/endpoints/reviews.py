@@ -8,7 +8,8 @@ from app.schemas.reviews import (
     ReviewListResponse,
     ReviewSourceListResponse,
     PaginatedReviewsResponse,
-    MetricsResponse
+    MetricsResponse,
+    AIAnalysisRequest
 )
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
@@ -256,3 +257,21 @@ async def get_reviews(
     except Exception as e:
         logger.error(f"Error in deprecated get_reviews endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ai-analysis", response_model=dict) # TODO Crear un modelo de respuesta adecuado
+async def analyze_reviews_with_ai(
+    body: AIAnalysisRequest,
+    service: ReviewService = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Analyze reviews using AI for sentiment analysis and topic modeling.
+
+    Args:
+        body (AIAnalysisRequest): Parameters for AI analysis
+        service (ReviewService, optional): _description_. Defaults to Depends(get_review_service).
+        current_user (dict, optional): _description_. Defaults to Depends(get_current_user).
+    """
+    ...
+    

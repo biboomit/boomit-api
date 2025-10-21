@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
 from datetime import datetime
 
@@ -194,6 +194,7 @@ class ReviewInternal(BaseModel):
             "updated_at": self.updated_at,
         }
 
+
 class MetricsResponse(BaseModel):
     """Response model for app metrics"""
 
@@ -215,6 +216,88 @@ class MetricsResponse(BaseModel):
                 "time_frame": {
                     "date_from": "2023-01-01T00:00:00Z",
                     "date_to": "2023-10-15T23:59:59Z",
+                },
+            }
+        }
+
+
+class AnalysisParameters(BaseModel):
+    """Parameters for AI analysis"""
+
+    from_date: Optional[datetime] = Field(None, description="Start date for analysis")
+    to_date: Optional[datetime] = Field(None, description="End date for analysis")
+    response_language: Optional[str] = Field(
+        "en", description="Language for the response"
+    )
+    min_rating: Optional[int] = Field(
+        None, ge=1, le=5, description="Minimum rating filter"
+    )
+    max_rating: Optional[int] = Field(
+        None, ge=1, le=5, description="Maximum rating filter"
+    )
+
+    @field_validator("response_language")
+    @classmethod
+    def normalize_language(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize response language to lowercase"""
+        return v.lower() if v else v
+
+    @field_validator("min_rating", "max_rating")
+    @classmethod
+    def validate_ratings(cls, v: Optional[int]) -> Optional[int]:
+        """Ensure ratings are within valid range"""
+        if v is not None and (v < 1 or v > 5):
+            raise ValueError("Ratings must be between 1 and 5")
+        return v
+
+    @field_validator("to_date")
+    @classmethod
+    def validate_date_range(cls, v: Optional[datetime], info) -> Optional[datetime]:
+        """Validate that to_date is not earlier than from_date"""
+        from_date = info.data.get("from_date")
+        if v is not None and from_date is not None and v < from_date:
+            raise ValueError("to_date cannot be earlier than from_date")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_rating_range(self) -> 'AnalysisParameters':
+        """Ensure min_rating is not greater than max_rating"""
+        if (self.min_rating is not None and 
+            self.max_rating is not None and 
+            self.min_rating > self.max_rating):
+            raise ValueError("min_rating cannot be greater than max_rating")
+        return self
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "from_date": "2024-01-01T00:00:00",
+                "to_date": "2024-12-31T23:59:59",
+                "response_language": "en",
+                "min_rating": 1,
+                "max_rating": 5,
+            }
+        }
+
+
+class AIAnalysisRequest(BaseModel):
+    """Request model for AI analysis of reviews"""
+
+    app_id: str = Field(..., description="App ID associated with the reviews")
+    analysis_type: str = Field(..., description="Type of AI analysis to perform")
+    parameters: Optional[AnalysisParameters] = Field(
+        None, description="Additional parameters for the AI analysis"
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "app_id": "com.example.app",
+                "analysis_type": "sentiment_analysis",
+                "parameters": {
+                    "from_date": "2024-01-01T00:00:00",
+                    "to_date": "2024-12-31T23:59:59",
+                    "response_language": "es",
                 },
             }
         }
