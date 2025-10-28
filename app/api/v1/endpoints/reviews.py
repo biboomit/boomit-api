@@ -9,7 +9,7 @@ from app.schemas.reviews import (
     ReviewSourceListResponse,
     PaginatedReviewsResponse,
     MetricsResponse,
-    AIAnalysisRequest
+    AIAnalysisRequest,
 )
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
@@ -181,7 +181,7 @@ async def get_metrics(
     current_user: dict = Depends(get_current_user),
 ):
     """Get metrics for a specific app.
-    
+
     Args:
         app_id: App ID to fetch metrics for
         date_from: Start date for metrics
@@ -195,17 +195,19 @@ async def get_metrics(
     Returns:
         MetricsResponse: The metrics for the specified app.
     """
-    
+
     if date_from is not None and date_to is not None and date_from > date_to:
         raise HTTPException(
             status_code=400, detail="date_from cannot be greater than date_to"
         )
-        
+
     try:
         metrics, time_frame, source = await service.get_metrics(
             app_id=app_id, date_from=date_from, date_to=date_to
         )
-        return MetricsResponse(app_id=app_id, metrics=metrics, time_frame=time_frame, source=source)
+        return MetricsResponse(
+            app_id=app_id, metrics=metrics, time_frame=time_frame, source=source
+        )
     except DatabaseConnectionError as e:
         error_message = str(e)
         if "not found" in error_message.lower():
@@ -216,6 +218,7 @@ async def get_metrics(
     except Exception as e:
         logger.error(f"Unexpected error in get_metrics for app {app_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/", response_model=ReviewListResponse, deprecated=True)
 async def get_reviews(
@@ -259,19 +262,48 @@ async def get_reviews(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/ai-analysis", response_model=dict) # TODO Crear un modelo de respuesta adecuado
+@router.get("/latest-ai-analysis", response_model=dict) # TODO: define a better response model
 async def analyze_reviews_with_ai(
-    body: AIAnalysisRequest,
+    app_id: str = Query(..., description="App ID to analyze reviews for"),
     service: ReviewService = Depends(get_review_service),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Analyze reviews using AI for sentiment analysis and topic modeling.
+    Analyze reviews for a specific app using AI and return the latest analysis.
 
     Args:
-        body (AIAnalysisRequest): Parameters for AI analysis
-        service (ReviewService, optional): _description_. Defaults to Depends(get_review_service).
-        current_user (dict, optional): _description_. Defaults to Depends(get_current_user).
+        app_id: App ID to analyze reviews for
+        service: Review service dependency
+        current_user: Authenticated user dependency
     """
-    ...
-    
+    try:
+        analysis_result = await service.get_latest_analysis(app_id=app_id)
+        return analysis_result
+    except Exception as e:
+        logger.error(
+            f"Unexpected error in analyze_reviews_with_ai for app {app_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/ai-analysis", response_model=dict) # TODO: define response model
+async def request_ai_analysis(
+    analysis_request: AIAnalysisRequest,
+    service: ReviewService = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Request AI analysis for reviews based on the provided parameters.
+    Default behavior is to analyze the reviews of the latest 30 days.
+
+    Args:
+        analysis_request (AIAnalysisRequest): Parameters for the AI analysis request. App ID is required.
+        service (ReviewService): Review service dependency. Defaults to Depends(get_review_service).
+        current_user (dict): Authenticated user dependency. Defaults to Depends(get_current_user).
+    """
+    try:
+        batch_id = await service.request_ai_analysis(analysis_request.app_id, analysis_request.parameters)
+        return {"batch_id": batch_id}
+    except Exception as e:
+        logger.error(f"Error in request_ai_analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

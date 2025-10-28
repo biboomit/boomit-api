@@ -1,7 +1,14 @@
 from typing import List, Optional, Tuple
 from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
-from app.schemas.reviews import ReviewResponse, Review, ReviewSourceResponse
+from app.schemas.reviews import (
+    ReviewResponse,
+    Review,
+    ReviewSourceResponse,
+    AIAnalysisRequest,
+    AnalysisParameters
+)
+from app.integrations.openai.batch import OpenAIBatchIntegration
 from app.core.config import bigquery_config
 from collections import defaultdict
 from datetime import datetime
@@ -14,6 +21,9 @@ class ReviewService:
     def __init__(self) -> None:
         self.client = bigquery_config.get_client()
         self.table_id = bigquery_config.get_table_id("DIM_REVIEWS_HISTORICO")
+        self.analysis_table_id = bigquery_config.get_table_id_with_dataset(
+            "AIOutput", "Reviews_Analysis"
+        )
 
     async def get_review_sources(
         self,
@@ -365,9 +375,7 @@ class ReviewService:
         app_id: str,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
-    ) -> tuple[
-        dict[str, int | float | None], dict[str, Optional[str]], str
-    ]:
+    ) -> tuple[dict[str, int | float | None], dict[str, Optional[str]], str]:
         """Get metrics for a specific app.
 
         Args:
@@ -462,5 +470,65 @@ class ReviewService:
         except Exception as e:
             raise DatabaseConnectionError(f"Error querying the database: {e}")
 
+    async def get_latest_analysis(
+        self,
+        app_id: str,
+    ) -> Optional[dict]:
+        """
+        Get the latest AI analysis for a specific app.
+
+        Args:
+            app_id (str): The ID of the app to fetch analysis for.
+        Returns:
+            Optional[dict]: The latest analysis data as a dictionary, or None if not found.
+        """
+        query = f"""
+        SELECT
+            json_data,
+        FROM `{self.analysis_table_id}`
+        WHERE app_id = @app_id
+        ORDER BY analyzed_at DESC
+        LIMIT 1
+        """
+
+        query_params = [bigquery.ScalarQueryParameter("app_id", "STRING", app_id)]
+        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+
+        try:
+            data_job = self.client.query(query, job_config=job_config)
+            data_results = data_job.result()
+            rows = list(data_results)
+
+            if rows:
+                return rows[0]["json_data"]
+            return None
+
+        except Exception as e:
+            raise DatabaseConnectionError(f"Error querying the database: {e}")
+
+    async def request_ai_analysis(
+        self,
+        app_id: str,
+        analysis_params: Optional[AnalysisParameters] = None,
+    ):
+        """
+        Request AI analysis for reviews of a specific app.
+        Calls an external AI (OpenAI) service to perform the analysis using batch processing.
+
+        Args:
+            app_id (str): The ID of the app to analyze.
+            analysis_params (Optional[AIAnalysisRequest]): The parameters for the analysis.
+        """
+        # 1. Obtain reviews for the app
+        reviews, total, _, _ = await self.get_reviews_by_app(app_id, limit=500)
+        
+        # 2. Call integration with AI service (OpenAI) to analyze reviews
+        openai_integration = OpenAIBatchIntegration()
+        review_texts_and_scores = [(review.comment, review.rating) for review in reviews]
+        
+        batch_id = openai_integration.process_using_batches(review_texts_and_scores)
+        
+        logger.info(f"Requested AI analysis for app_id: {app_id}, batch_id: {batch_id}")
+        return batch_id
 
 review_service = ReviewService()

@@ -293,11 +293,13 @@ class AIAnalysisRequest(BaseModel):
         schema_extra = {
             "example": {
                 "app_id": "com.example.app",
-                "analysis_type": "sentiment_analysis",
+                "analysis_type": "sentiment",
                 "parameters": {
                     "from_date": "2024-01-01T00:00:00",
                     "to_date": "2024-12-31T23:59:59",
                     "response_language": "es",
+                    "min_rating": 3,
+                    "max_rating": 5,
                 },
             }
         }

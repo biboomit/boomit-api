@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # JWT Security - Updated for HS256
     SECRET_KEY: str = Field(
-        default="boomit-jwt-secret-key-change-in-production-2024"
+        default="your-very-secure-and-long-secret-key-here"
     )
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     # Pagination
     DEFAULT_PAGE_SIZE: int = Field(default=20)
     MAX_PAGE_SIZE: int = Field(default=100)
+
+    # OpenAI Configuration
+    OPENAI_API_KEY: str = Field(default="your-openai-api-key")
+    OPENAI_BATCH_SIZE: int = Field(default=50)
+    OPENAI_MODEL: str = Field(default="gpt-4o-mini")
 
     # File Upload Configuration
     MAX_FILE_SIZE: int = Field(default=10 * 1024 * 1024)  # 10MB
@@ -266,11 +271,29 @@ class BigQueryConfig:
 
     def get_table_id(self, table_name):
         return f"{self.project_id}.{self.dataset_id}.{table_name}"
+    
+    def get_table_id_with_dataset(self, dataset_id, table_name):
+        return f"{self.project_id}.{dataset_id}.{table_name}"
 
 
 # Instancia global de configuración
 bigquery_config = BigQueryConfig()
 
+
+class OpenAIConfig:
+    def __init__(self):
+        self.api_key = settings.OPENAI_API_KEY
+
+    def get_api_key(self):
+        return self.api_key
+    
+    def get_batch_size(self):
+        return settings.OPENAI_BATCH_SIZE
+    
+    def get_model(self):
+        return settings.OPENAI_MODEL
+    
+    
 
 # Development helpers
 def print_config():
