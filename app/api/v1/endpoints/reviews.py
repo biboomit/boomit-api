@@ -302,8 +302,8 @@ async def request_ai_analysis(
         current_user (dict): Authenticated user dependency. Defaults to Depends(get_current_user).
     """
     try:
-        batch_id = await service.request_ai_analysis(analysis_request.app_id, analysis_request.parameters)
-        return {"batch_id": batch_id}
+        batch_object, file_uploaded = await service.request_ai_analysis(analysis_request.app_id, analysis_request.parameters)
+        return {"batch": batch_object, "file_uploaded": file_uploaded}
     except Exception as e:
         logger.error(f"Error in request_ai_analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))

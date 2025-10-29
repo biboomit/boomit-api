@@ -66,7 +66,7 @@ class Settings(BaseSettings):
 
     # OpenAI Configuration
     OPENAI_API_KEY: str = Field(default="your-openai-api-key")
-    OPENAI_BATCH_SIZE: int = Field(default=50)
+    OPENAI_BATCH_SIZE: int = Field(default=1)
     OPENAI_MODEL: str = Field(default="gpt-4o-mini")
 
     # File Upload Configuration

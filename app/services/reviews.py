@@ -526,9 +526,9 @@ class ReviewService:
         openai_integration = OpenAIBatchIntegration()
         review_texts_and_scores = [(review.comment, review.rating) for review in reviews]
         
-        batch_id = openai_integration.process_using_batches(review_texts_and_scores)
+        file_uploaded, batch_object = openai_integration.process_using_batches(review_texts_and_scores)
         
-        logger.info(f"Requested AI analysis for app_id: {app_id}, batch_id: {batch_id}")
-        return batch_id
+        logger.info(f"Requested AI analysis for app_id: {app_id}, batch_id: {batch_object.id}")
+        return batch_object, file_uploaded
 
 review_service = ReviewService()
