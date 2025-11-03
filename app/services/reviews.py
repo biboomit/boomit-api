@@ -630,7 +630,6 @@ class ReviewService:
             return reviews
         except Exception as e:
             raise DatabaseConnectionError(f"Error querying the database: {e}")
-        
     async def get_ai_analysis(self, app_id: str) -> Dict[str, Any]:
         """
         Get aggregated AI analysis for a specific app.
