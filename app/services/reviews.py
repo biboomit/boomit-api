@@ -526,8 +526,8 @@ class ReviewService:
         # 1. Obtain reviews for the app
         reviews = await self._get_reviews_for_analysis(app_id, analysis_params)
 
-        print(f"Fetched {len(reviews)} reviews for analysis of app_id: {app_id}")
-        print(f"Sample review: {reviews[0].comment if reviews else 'No reviews found'}")
+        logger.info(f"Fetched {len(reviews)} reviews for analysis of app_id: {app_id}")
+        logger.info(f"Sample review: {reviews[0].comment if reviews else 'No reviews found'}")
 
         # 2. Call integration with AI service (OpenAI) to analyze reviews
         openai_integration = OpenAIBatchIntegration()
