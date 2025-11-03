@@ -485,7 +485,7 @@ class ReviewService:
         """
         query = f"""
         SELECT
-            json_data,
+            json_data
         FROM `{self.analysis_table_id}`
         WHERE app_id = @app_id
         ORDER BY analyzed_at DESC
