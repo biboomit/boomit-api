@@ -286,7 +286,7 @@ async def analyze_reviews_with_ai(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/ai-analysis", response_model=dict) # TODO: define response model
+@router.post("/ai-analysis", response_model=dict)
 async def request_ai_analysis(
     analysis_request: AIAnalysisRequest,
     service: ReviewService = Depends(get_review_service),
@@ -307,3 +307,26 @@ async def request_ai_analysis(
     except Exception as e:
         logger.error(f"Error in request_ai_analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/ai-analysis", response_model=dict)
+async def get_ai_analysis(
+    app_id: str = Query(..., description="App ID to get AI analysis for"),
+    service: ReviewService = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get the analysis for a specific app performed by AI.
+
+    Args:
+        app_id: App ID to get AI analysis for
+        service: Review service dependency
+        current_user: Authenticated user dependency
+    """
+    try:
+        analysis_result = await service.get_ai_analysis(app_id=app_id)
+        return analysis_result
+    except Exception as e:
+        logger.error(
+            f"Unexpected error in get_ai_analysis for app {app_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")

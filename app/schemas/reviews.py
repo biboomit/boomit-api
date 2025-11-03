@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 class ReviewSourceResponse(BaseModel):
@@ -224,8 +224,8 @@ class MetricsResponse(BaseModel):
 class AnalysisParameters(BaseModel):
     """Parameters for AI analysis"""
 
-    from_date: Optional[datetime] = Field(None, description="Start date for analysis")
-    to_date: Optional[datetime] = Field(None, description="End date for analysis")
+    from_date: Optional[date] = Field(None, description="Start date for analysis")
+    to_date: Optional[date] = Field(None, description="End date for analysis")
     response_language: Optional[str] = Field(
         "en", description="Language for the response"
     )
@@ -271,8 +271,8 @@ class AnalysisParameters(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "from_date": "2024-01-01T00:00:00",
-                "to_date": "2024-12-31T23:59:59",
+                "from_date": "2024-01-01",
+                "to_date": "2024-12-31",
                 "response_language": "en",
                 "min_rating": 1,
                 "max_rating": 5,
@@ -295,8 +295,8 @@ class AIAnalysisRequest(BaseModel):
                 "app_id": "com.example.app",
                 "analysis_type": "sentiment",
                 "parameters": {
-                    "from_date": "2024-01-01T00:00:00",
-                    "to_date": "2024-12-31T23:59:59",
+                    "from_date": "2024-01-01",
+                    "to_date": "2024-12-31",
                     "response_language": "es",
                     "min_rating": 3,
                     "max_rating": 5,

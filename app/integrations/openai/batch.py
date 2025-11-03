@@ -3,6 +3,8 @@ import json
 from app.core.config import OpenAIConfig
 from openai import OpenAI
 from openai.lib._parsing._responses import type_to_text_format_param
+from app.integrations.openai.review_model_response import ReviewAnalysis
+from datetime import datetime, date
 
 
 class OpenAIBatchIntegration:
@@ -23,8 +25,8 @@ class OpenAIBatchIntegration:
         return uploaded, batch
 
     def _create_batches(
-        self, data: list[tuple[str, int]]
-    ) -> list[list[tuple[str, int]]]:
+        self, data: list[tuple[str, int, datetime]]
+    ) -> list[list[tuple[str, int, datetime]]]:
         """Create batches from the input data."""
         data_batches = []
         batch_size = OpenAIConfig().get_batch_size()
@@ -34,30 +36,32 @@ class OpenAIBatchIntegration:
 
         return data_batches
 
-    def _create_upload_file(self, batches: list[list[tuple[str, int]]]) -> str:
+    def _create_upload_file(
+        self, batches: list[list[tuple[str, int, datetime]]]
+    ) -> str:
         """Create a JSONL file from the batches."""
         lines = []
 
         # Flatten all batches and create JSONL lines
         for batch_idx, batch in enumerate(batches):
-            for item_idx, (content, score) in enumerate(batch):
+            for item_idx, (content, score, date) in enumerate(batch):
                 # Create the request body following OpenAI batch format
-                raise NotImplementedError(
-                    "Specify the desired response format in the body."
-                )
                 body = {
                     "model": OpenAIConfig().get_model(),
                     "input": [
                         {
                             "role": "system",
-                            "content": OpenAIConfig().get_system_prompt(),
+                            "content": OpenAIConfig().batch_system_prompt(),
                         },
                         {"role": "user", "content": f"{score}: {content}"},
                     ],
                     "text": {
-                        "format": ...  # TODO: specify the desired response format
+                        "format": type_to_text_format_param(ReviewAnalysis),
                     },
                     "prompt_cache_key": "review_analysis_v1",
+                    "metadata": {
+                        "review_date": date.isoformat(),
+                    },
                 }
 
                 # Create the batch request line

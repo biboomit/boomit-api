@@ -8,6 +8,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from google.cloud import bigquery
+from app.integrations.openai.review_prompt import SYSTEM_PROMPT
 
 
 class Settings(BaseSettings):
@@ -33,13 +34,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = Field(default="*")
 
     # JWT Security - Updated for HS256
-    SECRET_KEY: str = Field(
-        default="your-very-secure-and-long-secret-key-here"
-    )
+    SECRET_KEY: str = Field(default="your-very-secure-and-long-secret-key-here")
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
-    
+
     # Auth0 Configuration - DEPRECATED (commented out)
     # AUTH0_DOMAIN: str = Field(default="your-auth0-domain")
     # AUTH0_AUDIENCE: str = Field(default="your-auth0-audience")
@@ -271,7 +270,7 @@ class BigQueryConfig:
 
     def get_table_id(self, table_name):
         return f"{self.project_id}.{self.dataset_id}.{table_name}"
-    
+
     def get_table_id_with_dataset(self, dataset_id, table_name):
         return f"{self.project_id}.{dataset_id}.{table_name}"
 
@@ -286,14 +285,16 @@ class OpenAIConfig:
 
     def get_api_key(self):
         return self.api_key
-    
+
     def get_batch_size(self):
         return settings.OPENAI_BATCH_SIZE
-    
+
     def get_model(self):
         return settings.OPENAI_MODEL
-    
-    
+
+    def batch_system_prompt(self) -> str:
+        return SYSTEM_PROMPT
+
 
 # Development helpers
 def print_config():
