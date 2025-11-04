@@ -182,7 +182,7 @@ class AppService:
                     COALESCE(app_categoria, 'Unknown Category') as category,
                     COALESCE(fecha_actualizacion, CURRENT_DATE()) as last_update
                 FROM `{self.maestro_table}`
-                WHERE app_id = @app_id
+                WHERE LOWER(app_id) = LOWER(@app_id)
                 LIMIT 1
             """
             
@@ -221,7 +221,7 @@ class AppService:
                 'icon_url': row.icon_url,
                 'category': row.category,
                 'last_update': last_update,
-                'average_rating': ratings.get('average_rating'),
+                'rating_average': ratings.get('average_rating'),  # Correct field name
                 'total_ratings': ratings.get('total_ratings')
             }
             
