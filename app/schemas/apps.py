@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 
 
@@ -57,5 +57,34 @@ class AppDetailsResponse(BaseModel):
                 "lastUpdate": "2024-08-10",
                 "iconUrl": "https://play-lh.googleusercontent.com/...",
                 "category": "Health & Fitness"
+            }
+        }
+
+        
+class AppSearchResponse(BaseModel):
+    """Response model for app search endpoint containing array of apps"""
+    
+    apps: List[AppDetailsResponse] = Field(
+        ..., 
+        description="Array of apps matching search criteria"
+    )
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "apps": [
+                    {
+                        "appId": "com.farmatodo.app",
+                        "appName": "Farmatodo",
+                        "store": "android",
+                        "developer": "Farmatodo Inc.",
+                        "ratingAverage": 4.2,
+                        "totalRatings": 12543,
+                        "downloads": 2100000,
+                        "lastUpdate": "2024-08-10",
+                        "iconUrl": "https://play-lh.googleusercontent.com/...",
+                        "category": "Health & Fitness"
+                    }
+                ]
             }
         }
