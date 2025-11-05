@@ -50,7 +50,7 @@ class AppService:
         if country:
             where_conditions.append("LOWER(country_code) = @country")
             query_params.append(
-                bigquery.ScalarQueryParameter("country", "STRING", country.upper())
+                bigquery.ScalarQueryParameter("country", "STRING", country.lower())
             )
 
         where_clause = "WHERE " + " AND ".join(where_conditions)

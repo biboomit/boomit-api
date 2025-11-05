@@ -26,8 +26,8 @@ async def search_apps(
     ),
     country: Optional[str] = Query(
         None, 
-        description="Country code filter (ISO 2-letter format, e.g., 'US', 'VE')",
-        regex="^[A-Z]{2}$"
+        description="Country code filter (ISO 2-letter format, e.g., 'US', 'VE', 'gt')",
+        regex="^(?i)[A-Z]{2}$"
     ),
     service: AppService = Depends(get_app_service),
     current_user: dict = Depends(get_current_user),
