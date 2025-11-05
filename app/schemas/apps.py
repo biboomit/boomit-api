@@ -59,6 +59,8 @@ class AppDetailsResponse(BaseModel):
                 "category": "Health & Fitness"
             }
         }
+
+        
 class AppSearchResponse(BaseModel):
     """Response model for app search endpoint containing array of apps"""
     
