@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
 from app.services.apps import AppService, app_service
+from app.services.insights import InsightsService, insights_service
 from app.schemas.apps import AppSearchResponse, AppDetailsResponse
+from app.schemas.insights import AppInsightsResponse
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
 import logging
@@ -14,6 +16,10 @@ router = APIRouter()
 
 def get_app_service() -> AppService:
     return app_service
+
+
+def get_insights_service() -> InsightsService:
+    return insights_service
 
 
 @router.get("/search", response_model=AppSearchResponse)
@@ -114,6 +120,83 @@ async def search_apps(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/insights", response_model=AppInsightsResponse)
+async def get_app_insights(
+    appId: str = Query(..., description="App ID to get insights for (required)"),
+    fromDate: Optional[str] = Query(
+        None,
+        description="Start date filter in YYYY-MM-DD format (optional)",
+        regex="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
+    to: Optional[str] = Query(
+        None,
+        description="End date filter in YYYY-MM-DD format (optional)",
+        regex="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
+    country: Optional[str] = Query(
+        None,
+        description="Country code filter (ISO 2-letter format, optional)",
+        regex="^(?i)[A-Z]{2}$"
+    ),
+    service: InsightsService = Depends(get_insights_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get AI-generated insights for a specific app.
+
+    This endpoint retrieves insights derived from AI analysis of app reviews.
+    The insights are extracted from the DIM_MAESTRO_REVIEWS table where 
+    json_data contains structured analysis including strengths, weaknesses,
+    recommendations, and observations.
+
+    Args:
+        appId: App ID to get insights for (required)
+        fromDate: Optional start date filter (YYYY-MM-DD format)
+        to: Optional end date filter (YYYY-MM-DD format)  
+        country: Optional country code filter (ISO 2-letter format)
+        service: Insights service dependency
+        current_user: Authenticated user dependency
+
+    Returns:
+        AppInsightsResponse containing structured insights with:
+        - type: 'positive' or 'negative'
+        - title: Brief description of the insight
+        - change: Change indicator or percentage
+        - summary: Detailed explanation 
+        - period: Time period (YYYY-MM format)
+
+    Raises:
+        HTTPException: 500 if database query fails
+        HTTPException: 401 if user is not authenticated
+
+    Example:
+        GET /api/v1/apps/insights?appId=com.example.app&fromDate=2024-01-01&to=2024-12-31
+    """
+    try:
+        logger.info(f"Getting insights for app: {appId}")
+        
+        insights_response = await service.get_app_insights(
+            app_id=appId,
+            from_date=fromDate,
+            to_date=to,
+            country=country
+        )
+        
+        logger.info(f"Successfully retrieved {len(insights_response.insights)} insights for app: {appId}")
+        return insights_response
+        
+    except DatabaseConnectionError as e:
+        logger.error(f"Database error getting insights for app {appId}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve insights from database"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error getting insights for app {appId}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
+        
 @router.get("/{app_id}", response_model=AppDetailsResponse)
 async def get_app_details(
     app_id: str,
@@ -180,9 +263,4 @@ async def get_app_details(
     except HTTPException:
         # Re-raise HTTP exceptions (like 404)
         raise
-    except DatabaseConnectionError as e:
-        logger.error(f"Database error getting app details for {app_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logger.error(f"Unexpected error getting app details for {app_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+
