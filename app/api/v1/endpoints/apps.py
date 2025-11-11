@@ -133,18 +133,13 @@ async def get_app_insights(
         description="End date filter in YYYY-MM-DD format (optional)",
         regex="^\\d{4}-\\d{2}-\\d{2}$"
     ),
-    country: Optional[str] = Query(
-        None,
-        description="Country code filter (ISO 2-letter format, optional)",
-        regex="^(?i)[A-Z]{2}$"
-    ),
     service: InsightsService = Depends(get_insights_service),
     current_user: dict = Depends(get_current_user),
 ):
     """Get AI-generated insights for a specific app.
 
     This endpoint retrieves insights derived from AI analysis of app reviews.
-    The insights are extracted from the DIM_MAESTRO_REVIEWS table where 
+    The insights are extracted from the Reviews_Analysis table in the AIOutput dataset where 
     json_data contains structured analysis including strengths, weaknesses,
     recommendations, and observations.
 
@@ -152,7 +147,6 @@ async def get_app_insights(
         appId: App ID to get insights for (required)
         fromDate: Optional start date filter (YYYY-MM-DD format)
         to: Optional end date filter (YYYY-MM-DD format)  
-        country: Optional country code filter (ISO 2-letter format)
         service: Insights service dependency
         current_user: Authenticated user dependency
 
@@ -178,7 +172,6 @@ async def get_app_insights(
             app_id=appId,
             from_date=fromDate,
             to_date=to,
-            country=country
         )
         
         logger.info(f"Successfully retrieved {len(insights_response.insights)} insights for app: {appId}")
@@ -260,7 +253,16 @@ async def get_app_details(
         logger.info(f"Successfully retrieved details for app: {app_id}")
         return app_details
         
-    except HTTPException:
-        # Re-raise HTTP exceptions (like 404)
-        raise
+    except DatabaseConnectionError as db_exc:
+        logger.error(f"Database connection error while getting app details for {app_id}: {db_exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Database connection error. Please try again later."
+        )
+    except Exception as exc:
+        logger.error(f"Unexpected error while getting app details for {app_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
 

@@ -2,7 +2,6 @@ from typing import Optional, List
 import json
 import logging
 import hashlib
-from datetime import datetime
 from google.cloud import bigquery
 
 from app.core.config import bigquery_config
@@ -25,8 +24,7 @@ class InsightsService:
         self,
         app_id: str,
         from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        country: Optional[str] = None
+        to_date: Optional[str] = None
     ) -> AppInsightsResponse:
         """Get insights for a specific app from AI analysis data.
 
@@ -34,7 +32,6 @@ class InsightsService:
             app_id: App ID to get insights for
             from_date: Optional start date filter (YYYY-MM-DD format)
             to_date: Optional end date filter (YYYY-MM-DD format)
-            country: Optional country filter
 
         Returns:
             AppInsightsResponse containing processed insights
@@ -171,12 +168,10 @@ class InsightsService:
                 # Parse the JSON data
                 analysis_data = json.loads(row.json_data)
                 review_date = row.review_date
-                print(f"Review date: {review_date}")
                 # Extract period from review_date (YYYY-MM format)
                 #TODO: Check with Sebas why the reviewDate(within the json) is different from review_date(column on the table)
                 period =  review_date.strftime("%Y-%m") if review_date else "unknown"
-                print(f"Period: {period} 📅")
-                # Process strengths as positive insightss
+                # Process strengths as positive insights
                 strengths = analysis_data.get("strengths", [])
                 for strength in strengths:
                     content = strength.get('userImpact', 'Impacto positivo en los usuarios')
