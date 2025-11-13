@@ -99,7 +99,7 @@ async def get_reviews_by_app(
     ),
     filter: Optional[str] = Query(
         None, 
-        description="Filter type: must be exactly 'best' (rating > 2) or 'worst' (rating < 3) in lowercase", 
+        description="Filter type: must be exactly 'best' (rating >= 3) or 'worst' (rating < 3) in lowercase", 
         regex="^(best|worst)$"
     ),
     service: ReviewService = Depends(get_review_service),
