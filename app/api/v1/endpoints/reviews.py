@@ -143,7 +143,6 @@ async def get_reviews_by_app(
             status_code=400, detail="date_from cannot be greater than date_to"
         )
 
-
     try:
         skip = (page - 1) * per_page
         reviews, total, app_id_result, source = await service.get_reviews_by_app(
