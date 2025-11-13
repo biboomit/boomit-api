@@ -121,7 +121,7 @@ async def get_reviews_by_app(
         rating_max: Maximum rating (1-5)
         date_from: Start date for filtering reviews
         date_to: End date for filtering reviews
-        filter: Special filter - 'best' (rating > 2, ordered by rating desc) or 'worst' (rating < 3, ordered by rating asc)
+        filter: Special filter - 'best' (rating >= 3, ordered by rating desc) or 'worst' (rating < 3, ordered by rating asc)
         service: Review service dependency
         current_user: Authenticated user dependency
 
