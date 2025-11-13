@@ -163,7 +163,7 @@ class ReviewService:
             rating_max: Maximum rating filter (1-5)
             date_from: Start date filter
             date_to: End date filter
-            filter: Special filter - 'best' (rating > 2) or 'worst' (rating < 3)
+            filter: Special filter - 'best' (rating > 2) or 'worst' (rating <= 2)
 
         Returns:
             Tuple containing (reviews list, total count, app_id, source)
