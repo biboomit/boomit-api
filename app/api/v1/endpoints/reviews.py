@@ -97,6 +97,12 @@ async def get_reviews_by_app(
     date_to: Optional[datetime] = Query(
         None, description="Filter reviews until this date (ISO 8601 format)"
     ),
+    filter: Optional[str] = Query(
+        None, 
+        description="Filter type: must be exactly 'best' (rating > 2) or 'worst' (rating < 3) in lowercase", 
+        regex="^(best|worst)$",
+        min_length=1
+    ),
     service: ReviewService = Depends(get_review_service),
     current_user: dict = Depends(get_current_user),
 ):
@@ -105,6 +111,7 @@ async def get_reviews_by_app(
     This endpoint returns individual reviews for a specific app with support for:
     - Rating range filtering
     - Date range filtering
+    - Special filters (best/worst)
     - Pagination
 
     Args:
@@ -115,6 +122,7 @@ async def get_reviews_by_app(
         rating_max: Maximum rating (1-5)
         date_from: Start date for filtering reviews
         date_to: End date for filtering reviews
+        filter: Special filter - 'best' (rating > 2, ordered by rating desc) or 'worst' (rating < 3, ordered by rating asc)
         service: Review service dependency
         current_user: Authenticated user dependency
 
@@ -136,6 +144,21 @@ async def get_reviews_by_app(
             status_code=400, detail="date_from cannot be greater than date_to"
         )
 
+    # Validate filter parameter
+    if filter is not None:
+        # Check if filter is empty or blank
+        if not filter.strip():
+            raise HTTPException(
+                status_code=400, detail="filter parameter cannot be empty or blank"
+            )
+        
+        # Check if filter is exactly 'best' or 'worst' (case-sensitive)
+        if filter not in ["best", "worst"]:
+            raise HTTPException(
+                status_code=400, 
+                detail="filter must be exactly 'best' or 'worst' in lowercase"
+            )
+
     try:
         skip = (page - 1) * per_page
         reviews, total, app_id_result, source = await service.get_reviews_by_app(
@@ -146,6 +169,7 @@ async def get_reviews_by_app(
             rating_max=rating_max,
             date_from=date_from,
             date_to=date_to,
+            filter=filter,
         )
 
         return PaginatedReviewsResponse(

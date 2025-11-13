@@ -151,6 +151,7 @@ class ReviewService:
         rating_max: Optional[int] = None,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
+        filter: Optional[str] = None,
     ) -> Tuple[List[Review], int, str, str]:
         """Get paginated reviews for a specific app with optional filters.
 
@@ -162,6 +163,7 @@ class ReviewService:
             rating_max: Maximum rating filter (1-5)
             date_from: Start date filter
             date_to: End date filter
+            filter: Special filter - 'best' (rating > 2) or 'worst' (rating < 3)
 
         Returns:
             Tuple containing (reviews list, total count, app_id, source)
@@ -196,6 +198,15 @@ class ReviewService:
                 bigquery.ScalarQueryParameter("date_to", "TIMESTAMP", date_to)
             )
 
+        # Handle special filter types
+        order_clause = "ORDER BY fecha DESC"  # Default ordering
+        if filter == "best":
+            where_clauses.append("score > 2")
+            order_clause = "ORDER BY score DESC, fecha DESC"
+        elif filter == "worst":
+            where_clauses.append("score < 3")
+            order_clause = "ORDER BY score ASC, fecha DESC"
+
         where_clause = "WHERE " + " AND ".join(where_clauses)
 
         # First, check if app exists and get its source
@@ -218,7 +229,7 @@ class ReviewService:
             LOWER(source) as source
         FROM `{self.table_id}`
         {where_clause}
-        ORDER BY fecha DESC
+        {order_clause}
         LIMIT @limit OFFSET @skip
         """
 
@@ -240,7 +251,7 @@ class ReviewService:
         try:
             logger.info(
                 f"Fetching reviews for app_id: {app_id} with filters - "
-                f"rating: {rating_min}-{rating_max}, date: {date_from}-{date_to}"
+                f"rating: {rating_min}-{rating_max}, date: {date_from}-{date_to}, filter: {filter}"
             )
 
             # Check if app exists
