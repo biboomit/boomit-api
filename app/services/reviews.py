@@ -201,10 +201,10 @@ class ReviewService:
         # Handle special filter types
         order_clause = "ORDER BY fecha DESC"  # Default ordering
         if filter == "best":
-            where_clauses.append("score > 2")
+            where_clauses.append("score >= 3")
             order_clause = "ORDER BY score DESC, fecha DESC"
         elif filter == "worst":
-            where_clauses.append("score < 3")
+            where_clauses.append("score <= 2")
             order_clause = "ORDER BY score ASC, fecha DESC"
 
         where_clause = "WHERE " + " AND ".join(where_clauses)

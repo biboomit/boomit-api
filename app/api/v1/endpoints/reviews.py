@@ -100,8 +100,7 @@ async def get_reviews_by_app(
     filter: Optional[str] = Query(
         None, 
         description="Filter type: must be exactly 'best' (rating > 2) or 'worst' (rating < 3) in lowercase", 
-        regex="^(best|worst)$",
-        min_length=1
+        regex="^(best|worst)$"
     ),
     service: ReviewService = Depends(get_review_service),
     current_user: dict = Depends(get_current_user),
@@ -144,20 +143,6 @@ async def get_reviews_by_app(
             status_code=400, detail="date_from cannot be greater than date_to"
         )
 
-    # Validate filter parameter
-    if filter is not None:
-        # Check if filter is empty or blank
-        if not filter.strip():
-            raise HTTPException(
-                status_code=400, detail="filter parameter cannot be empty or blank"
-            )
-        
-        # Check if filter is exactly 'best' or 'worst' (case-sensitive)
-        if filter not in ["best", "worst"]:
-            raise HTTPException(
-                status_code=400, 
-                detail="filter must be exactly 'best' or 'worst' in lowercase"
-            )
 
     try:
         skip = (page - 1) * per_page
