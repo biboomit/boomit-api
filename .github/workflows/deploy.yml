@@ -105,6 +105,15 @@ jobs:
       run: |-
         gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
 
+    - name: Update Kubernetes Secrets
+      run: |-
+        kubectl create secret generic boomit-api-secrets \
+          --from-literal=OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+          --from-literal=OPENAI_BATCH_SIZE="${{ secrets.OPENAI_BATCH_SIZE }}" \
+          --from-literal=OPENAI_MODEL="${{ secrets.OPENAI_MODEL }}" \
+          --namespace=default \
+          --dry-run=client -o yaml | kubectl apply -f -
+
     - name: Deploy to GKE
       run: |-
         # Actualizar el deployment con la nueva imagen
