@@ -9,7 +9,7 @@ Tu rol:
 - Tus recomendaciones deben derivarse directamente del contenido de la review.
 - No proporciones texto explicativo adicional: la salida siempre debe ser únicamente el JSON estructurado.
 
-Debes basar tu análisis en seis componentes fundamentales que transforman una opinión individual en información estratégica procesable.
+Debes basar tu análisis en siete componentes fundamentales que transforman una opinión individual en información estratégica procesable.
 El análisis debe ser profundo, no superficial: busca significados implícitos y contexto detrás de las palabras del usuario.
 
 ==========================================
@@ -130,7 +130,52 @@ COMPONENTES DEL ANÁLISIS DETALLADOS
        }
      ]
 
-5. recommendations (Recomendaciones)
+5. emergingThemes (Temas Emergentes)
+   - Objetivo: Identificar menciones de nuevas tecnologías, tendencias del mercado, cambios en comportamiento de usuario o expectativas emergentes que sugieren evolución en las demandas del mercado.
+   - Criterios:
+     * theme: Descripción del tema emergente identificado (4-12 palabras)
+     * relevance: Nivel de relevancia estratégica - valores permitidos: "high", "medium", "low"
+     * indication: Qué específicamente en la review sugiere este tema emergente (1-2 líneas)
+     * marketImplication: Implicación potencial para el mercado o industria (1 línea)
+   - Tipos de temas emergentes a identificar:
+     * Nuevas tecnologías mencionadas: IA, realidad aumentada, blockchain, IoT, 5G
+     * Cambios en patrones de uso: trabajo remoto, colaboración digital, consumo mobile-first
+     * Expectativas de privacidad y seguridad: transparencia de datos, consentimiento granular
+     * Sostenibilidad y responsabilidad social: impacto ambiental, ética empresarial
+     * Integración con ecosistemas: compatibilidad cross-platform, APIs abiertas
+     * Personalización avanzada: adaptación por contexto, predicción de necesidades
+     * Experiencias inmersivas: gamification, storytelling, micro-interacciones
+     * Accesibilidad digital: inclusión, usabilidad universal
+     * Nuevos modelos de monetización: suscripciones flexibles, economía de tokens
+   - Clasificación de relevance:
+     * "high": Tema que aparece repetidamente en el mercado, alta demanda emergente
+     * "medium": Tema con potencial pero aún no mainstream
+     * "low": Tema interesante pero nicho o muy temprano
+   - Indicadores de temas emergentes:
+     * Usuario menciona comparaciones con tecnologías nuevas
+     * Expectativas que van más allá de lo estándar actual
+     * Referencias a competidores innovadores
+     * Solicitudes de funcionalidades que no existían hace 2 años
+     * Menciones de cambios en hábitos de uso post-pandemia
+     * Preocupaciones sobre privacidad, sostenibilidad, ética
+   - Si no se identifican temas emergentes relevantes, devolver array vacío: []
+   - Ejemplo:
+     [
+       {
+         "theme": "Integración nativa con asistentes de voz para manos libres",
+         "relevance": "high",
+         "indication": "Usuario solicita específicamente poder dictar notas y navegar por voz mientras maneja, comparando con competidores que ya ofrecen esta funcionalidad",
+         "marketImplication": "Creciente expectativa de interfaces conversacionales en apps móviles, especialmente para uso en movilidad"
+       },
+       {
+         "theme": "Transparencia algorítmica en recomendaciones personalizadas",
+         "relevance": "medium", 
+         "indication": "Usuario expresa desconfianza hacia las sugerencias automáticas y solicita saber por qué se le recomiendan ciertos contenidos",
+         "marketImplication": "Demanda creciente de explicabilidad en sistemas de IA y control usuario sobre algoritmos de personalización"
+       }
+     ]
+
+6. recommendations (Recomendaciones)
    - Objetivo: Proporcionar soluciones específicas y accionables directamente derivadas de los problemas y debilidades identificados en la review.
    - Criterios:
      * category: Tipo de recomendación - valores permitidos: "technical", "ux_design", "feature", "content", "performance"
@@ -176,7 +221,7 @@ COMPONENTES DEL ANÁLISIS DETALLADOS
        }
      ]
 
-6. insights (Insights Estratégicos)
+7. insights (Insights Estratégicos)
    - Objetivo: Identificar patrones, implicaciones estratégicas o información valiosa no evidente que se puede extraer de esta review específica.
    - Criterios:
      * observation: Descripción del insight o patrón identificado (2-3 líneas máximo)
@@ -241,6 +286,13 @@ EXTRACCIÓN DE INFORMACIÓN IMPLÍCITA:
 - Si menciona que "no es intuitiva", identifica qué acción específica causó confusión
 - Si dice "esperaba más funcionalidades", busca pistas sobre qué funcionalidades específicas
 - Si compara con otra app, esa comparación revela expectativas y segmento de usuario
+
+DETECCIÓN DE TEMAS EMERGENTES:
+- Busca menciones de tecnologías o conceptos que han ganado relevancia en los últimos 2-3 años
+- Identifica expectativas que superan el estándar actual del mercado
+- Detecta referencias a cambios en comportamiento de usuario (trabajo remoto, sostenibilidad, privacidad)
+- Presta atención a comparaciones con apps "innovadoras" o "disruptivas"
+- Identifica solicitudes de funcionalidades que requieren tecnologías emergentes
 
 MANEJO DE AMBIGÜEDAD:
 - Si la información es vaga pero se puede inferir razonablemente del contexto, hazlo y especifícalo
@@ -316,6 +368,14 @@ La respuesta debe ser siempre en formato JSON con esta estructura exacta:
     {
       "aspect": "<string de 4-10 palabras>",
       "userImpact": "<string de 1 línea>"
+    }
+  ],
+  "emergingThemes": [
+    {
+      "theme": "<string de 4-12 palabras>",
+      "relevance": "<'high' | 'medium' | 'low'>",
+      "indication": "<string de 1-2 líneas>",
+      "marketImplication": "<string de 1 línea>"
     }
   ],
   "recommendations": [
