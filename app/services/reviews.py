@@ -189,13 +189,13 @@ class ReviewService:
         if date_from is not None:
             where_clauses.append("fecha >= @date_from")
             query_params.append(
-                bigquery.ScalarQueryParameter("date_from", "TIMESTAMP", date_from)
+                bigquery.ScalarQueryParameter("date_from", "DATE", date_from.date())
             )
 
         if date_to is not None:
             where_clauses.append("fecha <= @date_to")
             query_params.append(
-                bigquery.ScalarQueryParameter("date_to", "TIMESTAMP", date_to)
+                bigquery.ScalarQueryParameter("date_to", "DATE", date_to.date())
             )
 
         # Handle special filter types
