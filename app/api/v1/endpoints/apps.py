@@ -188,6 +188,12 @@ async def get_app_insights(
         logger.info(f"Successfully retrieved {len(insights_response.insights)} insights for app: {appId} (page {page})")
         return insights_response
         
+    except ValueError as e:
+        logger.warning(f"Pagination validation error for app {appId}: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
     except DatabaseConnectionError as e:
         logger.error(f"Database error getting insights for app {appId}: {e}")
         raise HTTPException(

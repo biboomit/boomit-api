@@ -6,7 +6,7 @@ from google.cloud import bigquery
 
 from app.core.config import bigquery_config
 from app.core.exceptions import DatabaseConnectionError
-from app.schemas.insights import InsightItem, AppInsightsResponse, PaginatedAppInsightsResponse
+from app.schemas.insights import InsightItem, PaginatedAppInsightsResponse
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,12 @@ class InsightsService:
             # Apply pagination
             start_index = (page - 1) * per_page
             end_index = start_index + per_page
+            
+            # Validate page bounds
+            if total_insights > 0 and start_index >= total_insights:
+                max_pages = ((total_insights - 1) // per_page) + 1
+                raise ValueError(f"Requested page {page} is out of bounds. There are only {max_pages} pages available.")
+            
             paginated_insights = all_insights[start_index:end_index]
             
             logger.info(f"Found {total_insights} total insights for app: {app_id}, returning page {page} with {len(paginated_insights)} insights")
@@ -110,6 +116,9 @@ class InsightsService:
                 per_page=per_page
             )
 
+        except ValueError:
+            # Re-raise ValueError for pagination validation (don't convert to DatabaseConnectionError)
+            raise
         except Exception as e:
             logger.error(f"Error getting insights for app {app_id}: {e}")
             raise DatabaseConnectionError(f"Error querying the database: {e}")
