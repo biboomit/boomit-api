@@ -319,6 +319,12 @@ async def request_ai_analysis(
 @router.get("/ai-analysis", response_model=dict)
 async def get_ai_analysis(
     app_id: str = Query(..., description="App ID to get AI analysis for"),
+    date_from: Optional[datetime] = Query(
+        None, description="Start date for analysis filtering (ISO 8601 format)"
+    ),
+    date_to: Optional[datetime] = Query(
+        None, description="End date for analysis filtering (ISO 8601 format)"
+    ),
     service: ReviewService = Depends(get_review_service),
     current_user: dict = Depends(get_current_user),
 ):
@@ -327,11 +333,19 @@ async def get_ai_analysis(
 
     Args:
         app_id: App ID to get AI analysis for
+        date_from: Optional start date for filtering analysis results
+        date_to: Optional end date for filtering analysis results
         service: Review service dependency
         current_user: Authenticated user dependency
     """
+    # Validate date range
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(
+            status_code=400, detail="date_from cannot be greater than date_to"
+        )
+
     try:
-        analysis_result = await service.get_ai_analysis(app_id=app_id)
+        analysis_result = await service.get_ai_analysis(app_id=app_id, date_from=date_from, date_to=date_to)
         return analysis_result
     except Exception as e:
         logger.error(
