@@ -641,7 +641,7 @@ class ReviewService:
             return reviews
         except Exception as e:
             raise DatabaseConnectionError(f"Error querying the database: {e}")
-    async def get_ai_analysis(self, app_id: str) -> Dict[str, Any]:
+    async def get_ai_analysis(self, app_id: str, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> Dict[str, Any]:
         """
         Get aggregated AI analysis for a specific app.
         
@@ -651,23 +651,40 @@ class ReviewService:
         
         Args:
             app_id: The ID of the app to fetch analysis for
+            date_from: Optional start date for filtering analysis results
+            date_to: Optional end date for filtering analysis results
             
         Returns:
             Dict containing aggregated analysis based on actual review data
         """
         
-        # Query to fetch all analyses for the app
+        # Build query with optional date filtering
+        where_conditions = ["app_id = @app_id"]
+        query_params = [bigquery.ScalarQueryParameter("app_id", "STRING", app_id)]
+        
+        if date_from is not None:
+            where_conditions.append("review_date >= @date_from")
+            date_from_param = date_from.date() if date_from else None
+            query_params.append(bigquery.ScalarQueryParameter("date_from", "DATE", date_from_param))
+        
+        if date_to is not None:
+            where_conditions.append("review_date <= @date_to")
+            date_to_param = date_to.date() if date_to else None
+            query_params.append(bigquery.ScalarQueryParameter("date_to", "DATE", date_to_param))
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # Query to fetch all analyses for the app with optional date filtering
         query = f"""
         SELECT
             json_data,
             review_date,
             analyzed_at
         FROM `{self.analysis_table_id}`
-        WHERE app_id = @app_id
+        WHERE {where_clause}
         ORDER BY analyzed_at DESC
         """
         
-        query_params = [bigquery.ScalarQueryParameter("app_id", "STRING", app_id)]
         job_config = bigquery.QueryJobConfig(query_parameters=query_params)
         
         try:
