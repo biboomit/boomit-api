@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
+from app.core.config import settings
 from app.services.apps import AppService, app_service
 from app.services.insights import InsightsService, insights_service
 from app.schemas.apps import AppSearchResponse, AppDetailsResponse
-from app.schemas.insights import AppInsightsResponse
+from app.schemas.insights import PaginatedAppInsightsResponse
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
 import logging
@@ -120,7 +121,7 @@ async def search_apps(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/insights", response_model=AppInsightsResponse)
+@router.get("/insights", response_model=PaginatedAppInsightsResponse)
 async def get_app_insights(
     appId: str = Query(..., description="App ID to get insights for (required)"),
     fromDate: Optional[str] = Query(
@@ -133,10 +134,17 @@ async def get_app_insights(
         description="End date filter in YYYY-MM-DD format (optional)",
         regex="^\\d{4}-\\d{2}-\\d{2}$"
     ),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(
+        settings.DEFAULT_PER_PAGE,
+        ge=1,
+        le=settings.MAX_PER_PAGE,
+        description="Number of items per page"
+    ),
     service: InsightsService = Depends(get_insights_service),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get AI-generated insights for a specific app.
+    """Get AI-generated insights for a specific app with pagination.
 
     This endpoint retrieves insights derived from AI analysis of app reviews.
     The insights are extracted from the Reviews_Analysis table in the AIOutput dataset where 
@@ -146,35 +154,38 @@ async def get_app_insights(
     Args:
         appId: App ID to get insights for (required)
         fromDate: Optional start date filter (YYYY-MM-DD format)
-        to: Optional end date filter (YYYY-MM-DD format)  
+        to: Optional end date filter (YYYY-MM-DD format)
+        page: Page number (default: 1)
+        per_page: Number of items per page (default: configured value)
         service: Insights service dependency
         current_user: Authenticated user dependency
 
     Returns:
-        AppInsightsResponse containing structured insights with:
-        - type: 'positive' or 'negative'
-        - title: Brief description of the insight
-        - change: Change indicator or percentage
-        - summary: Detailed explanation 
-        - period: Time period (YYYY-MM format)
+        PaginatedAppInsightsResponse containing structured insights with:
+        - insights: Array of insight items
+        - total: Total number of insights
+        - page: Current page number
+        - per_page: Number of items per page
 
     Raises:
         HTTPException: 500 if database query fails
         HTTPException: 401 if user is not authenticated
 
     Example:
-        GET /api/v1/apps/insights?appId=com.example.app&fromDate=2024-01-01&to=2024-12-31
+        GET /api/v1/apps/insights?appId=com.example.app&fromDate=2024-01-01&to=2024-12-31&page=1&per_page=10
     """
     try:
-        logger.info(f"Getting insights for app: {appId}")
+        logger.info(f"Getting insights for app: {appId}, page: {page}, per_page: {per_page}")
         
         insights_response = await service.get_app_insights(
             app_id=appId,
             from_date=fromDate,
             to_date=to,
+            page=page,
+            per_page=per_page,
         )
         
-        logger.info(f"Successfully retrieved {len(insights_response.insights)} insights for app: {appId}")
+        logger.info(f"Successfully retrieved {len(insights_response.insights)} insights for app: {appId} (page {page})")
         return insights_response
         
     except DatabaseConnectionError as e:

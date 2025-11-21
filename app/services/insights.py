@@ -6,7 +6,7 @@ from google.cloud import bigquery
 
 from app.core.config import bigquery_config
 from app.core.exceptions import DatabaseConnectionError
-from app.schemas.insights import InsightItem, AppInsightsResponse
+from app.schemas.insights import InsightItem, AppInsightsResponse, PaginatedAppInsightsResponse
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +24,21 @@ class InsightsService:
         self,
         app_id: str,
         from_date: Optional[str] = None,
-        to_date: Optional[str] = None
-    ) -> AppInsightsResponse:
-        """Get insights for a specific app from AI analysis data.
+        to_date: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 10
+    ) -> PaginatedAppInsightsResponse:
+        """Get insights for a specific app from AI analysis data with pagination.
 
         Args:
             app_id: App ID to get insights for
             from_date: Optional start date filter (YYYY-MM-DD format)
             to_date: Optional end date filter (YYYY-MM-DD format)
+            page: Page number (1-based)
+            per_page: Number of items per page
 
         Returns:
-            AppInsightsResponse containing processed insights
+            PaginatedAppInsightsResponse containing processed insights with pagination info
 
         Raises:
             DatabaseConnectionError: If query fails
@@ -72,7 +76,6 @@ class InsightsService:
             FROM `{self.analysis_table_id}`
             {where_clause}
             ORDER BY analyzed_at DESC
-            LIMIT 1
             """
 
             job_config = bigquery.QueryJobConfig(query_parameters=query_params)
@@ -82,13 +85,30 @@ class InsightsService:
 
             if not results:
                 logger.info(f"No analysis data found for app: {app_id}")
-                return AppInsightsResponse(insights=[])
+                return PaginatedAppInsightsResponse(
+                    insights=[],
+                    total=0,
+                    page=page,
+                    per_page=per_page
+                )
 
             # Process the JSON data to extract insights
-            insights = self._process_analysis_data(results)
+            all_insights = self._process_analysis_data(results)
+            total_insights = len(all_insights)
             
-            logger.info(f"Found {len(insights)} insights for app: {app_id}")
-            return AppInsightsResponse(insights=insights)
+            # Apply pagination
+            start_index = (page - 1) * per_page
+            end_index = start_index + per_page
+            paginated_insights = all_insights[start_index:end_index]
+            
+            logger.info(f"Found {total_insights} total insights for app: {app_id}, returning page {page} with {len(paginated_insights)} insights")
+            
+            return PaginatedAppInsightsResponse(
+                insights=paginated_insights,
+                total=total_insights,
+                page=page,
+                per_page=per_page
+            )
 
         except Exception as e:
             logger.error(f"Error getting insights for app {app_id}: {e}")
