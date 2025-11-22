@@ -238,7 +238,7 @@ class InsightsService:
                 continue
         
         # Apply temporal aggregation and deduplication
-        aggregated_insights = self._apply_temporal_aggregation(all_raw_insights, analyses_by_period)
+        aggregated_insights = self._apply_temporal_aggregation(all_raw_insights)
         
         # Final sorting by relevance and recency
         return self._sort_insights_by_temporal_relevance(aggregated_insights)
