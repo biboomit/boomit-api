@@ -316,7 +316,7 @@ class InsightsService:
         
         return insights
 
-    def _apply_temporal_aggregation(self, raw_insights: List[dict]) -> List[InsightItem]:
+    def _apply_temporal_aggregation(self, raw_insights: List[dict], analyses_by_period=None) -> List[InsightItem]:
         """Apply temporal aggregation logic to merge similar insights across time."""
         # Group insights by similarity
         insight_groups = {}
