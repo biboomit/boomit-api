@@ -2,6 +2,7 @@ from typing import Optional, List
 import json
 import logging
 import hashlib
+from datetime import datetime, timezone
 from google.cloud import bigquery
 
 from app.core.config import bigquery_config
@@ -28,7 +29,11 @@ class InsightsService:
         page: int = 1,
         per_page: int = 10
     ) -> PaginatedAppInsightsResponse:
-        """Get insights for a specific app from AI analysis data with pagination.
+        """Get insights for a specific app from AI analysis data with temporal aggregation and pagination.
+
+        This method aggregates insights from multiple analysis records over time, providing
+        a comprehensive view of app insights trends. It handles temporal deduplication,
+        prioritizes recent insights, and tracks insight evolution over time.
 
         Args:
             app_id: App ID to get insights for
@@ -38,7 +43,7 @@ class InsightsService:
             per_page: Number of items per page
 
         Returns:
-            PaginatedAppInsightsResponse containing processed insights with pagination info
+            PaginatedAppInsightsResponse containing temporally aggregated insights with pagination info
 
         Raises:
             DatabaseConnectionError: If query fails
@@ -92,8 +97,8 @@ class InsightsService:
                     per_page=per_page
                 )
 
-            # Process the JSON data to extract insights
-            all_insights = self._process_analysis_data(results)
+            # Process multiple analyses with temporal aggregation
+            all_insights = self._process_multiple_analyses_with_temporal_logic(results)
             total_insights = len(all_insights)
             
             # Apply pagination
@@ -107,7 +112,7 @@ class InsightsService:
             
             paginated_insights = all_insights[start_index:end_index]
             
-            logger.info(f"Found {total_insights} total insights for app: {app_id}, returning page {page} with {len(paginated_insights)} insights")
+            logger.info(f"Processed {len(results)} analyses into {total_insights} aggregated insights for app: {app_id}, returning page {page} with {len(paginated_insights)} insights")
             
             return PaginatedAppInsightsResponse(
                 insights=paginated_insights,
@@ -181,6 +186,330 @@ class InsightsService:
         hash_val = int(hashlib.md5(content.encode('utf-8')).hexdigest(), 16)
         return options[hash_val % len(options)]
 
+    def _process_multiple_analyses_with_temporal_logic(self, results: List) -> List[InsightItem]:
+        """Process multiple analysis records with advanced temporal aggregation.
+        
+        This method handles:
+        1. Temporal grouping of insights by type and content similarity
+        2. Evolution tracking of insights over time
+        3. Prioritization of recent insights
+        4. Intelligent deduplication across time periods
+        
+        Args:
+            results: Raw query results from BigQuery ordered by analyzed_at DESC
+            
+        Returns:
+            List of temporally aggregated InsightItem objects
+        """
+        if not results:
+            return []
+            
+        # Group analyses by time periods for temporal processing
+        analyses_by_period = {}
+        all_raw_insights = []
+        
+        for row in results:
+            try:
+                analysis_data = json.loads(row.json_data)
+                review_date = row.review_date
+                analyzed_at = row.analyzed_at
+                period = review_date.strftime("%Y-%m") if review_date else "unknown"
+                
+                # Store analysis metadata for temporal processing
+                analysis_meta = {
+                    'data': analysis_data,
+                    'review_date': review_date,
+                    'analyzed_at': analyzed_at,
+                    'period': period,
+                    'recency_score': self._calculate_recency_score(analyzed_at)
+                }
+                
+                # Group by period for temporal analysis
+                if period not in analyses_by_period:
+                    analyses_by_period[period] = []
+                analyses_by_period[period].append(analysis_meta)
+                
+                # Extract raw insights with metadata
+                raw_insights = self._extract_insights_with_metadata(analysis_meta)
+                all_raw_insights.extend(raw_insights)
+                
+            except (json.JSONDecodeError, KeyError, AttributeError) as e:
+                logger.warning(f"Error processing analysis data: {e}")
+                continue
+        
+        # Apply temporal aggregation and deduplication
+        aggregated_insights = self._apply_temporal_aggregation(all_raw_insights, analyses_by_period)
+        
+        # Final sorting by relevance and recency
+        return self._sort_insights_by_temporal_relevance(aggregated_insights)
+
+    def _calculate_recency_score(self, analyzed_at) -> float:
+        """Calculate recency score for temporal weighting (0.0 to 1.0)."""
+        from datetime import datetime, timezone
+        
+        if not analyzed_at:
+            return 0.0
+            
+        now = datetime.now(timezone.utc)
+        if analyzed_at.tzinfo is None:
+            analyzed_at = analyzed_at.replace(tzinfo=timezone.utc)
+            
+        # Calculate days since analysis
+        days_diff = (now - analyzed_at).days
+        
+        # Exponential decay: recent analyses get higher scores
+        # Score approaches 0 after ~90 days
+        return max(0.0, min(1.0, 1.0 - (days_diff / 90.0)))
+
+    def _extract_insights_with_metadata(self, analysis_meta: dict) -> List[dict]:
+        """Extract insights from a single analysis with temporal metadata."""
+        insights = []
+        analysis_data = analysis_meta['data']
+        
+        # Process strengths
+        strengths = analysis_data.get("strengths", [])
+        for strength in strengths:
+            insights.append({
+                'type': 'positive',
+                'category': 'strength',
+                'title': f"Fortaleza: {strength.get('feature', 'Feature destacado')}",
+                'content': strength.get('userImpact', 'Impacto positivo en los usuarios'),
+                'metadata': analysis_meta,
+                'raw_data': strength
+            })
+        
+        # Process weaknesses
+        weaknesses = analysis_data.get("weaknesses", [])
+        for weakness in weaknesses:
+            insights.append({
+                'type': 'negative',
+                'category': 'weakness',
+                'title': f"Área de mejora: {weakness.get('aspect', 'Aspecto a mejorar')}",
+                'content': weakness.get('userImpact', 'Impacto negativo en los usuarios'),
+                'metadata': analysis_meta,
+                'raw_data': weakness
+            })
+        
+        # Process insights array
+        raw_insights = analysis_data.get("insights", [])
+        for raw_insight in raw_insights:
+            insight_type = self._determine_insight_type(raw_insight.get("type", ""))
+            insights.append({
+                'type': insight_type,
+                'category': 'insight',
+                'title': f"Insight: {raw_insight.get('type', 'Observación general')}",
+                'content': raw_insight.get('observation', 'Observación general'),
+                'metadata': analysis_meta,
+                'raw_data': raw_insight
+            })
+        
+        # Process recommendations
+        recommendations = analysis_data.get("recommendations", [])
+        for recommendation in recommendations:
+            insights.append({
+                'type': 'negative',
+                'category': 'recommendation',
+                'title': f"Recomendación ({recommendation.get('priority', 'medium')}): {recommendation.get('category', 'general')}",
+                'content': recommendation.get('action', 'Acción recomendada'),
+                'metadata': analysis_meta,
+                'raw_data': recommendation
+            })
+        
+        return insights
+
+    def _apply_temporal_aggregation(self, raw_insights: List[dict], analyses_by_period: dict) -> List[InsightItem]:
+        """Apply temporal aggregation logic to merge similar insights across time."""
+        # Group insights by similarity
+        insight_groups = {}
+        
+        for insight in raw_insights:
+            # Create a similarity key based on category, type, and content similarity
+            similarity_key = self._generate_similarity_key(insight)
+            
+            if similarity_key not in insight_groups:
+                insight_groups[similarity_key] = []
+            insight_groups[similarity_key].append(insight)
+        
+        # Process each group to create aggregated insights
+        aggregated_insights = []
+        
+        for similarity_key, group in insight_groups.items():
+            # Sort group by recency (most recent first)
+            group.sort(key=lambda x: x['metadata']['recency_score'], reverse=True)
+            
+            # Use the most recent insight as the base
+            base_insight = group[0]
+            
+            # Calculate temporal trends and evolution
+            evolution_data = self._analyze_insight_evolution(group)
+            
+            # Create the aggregated insight
+            aggregated_insight = InsightItem(
+                type=base_insight['type'],
+                title=base_insight['title'],
+                change=self._generate_temporal_change_value(base_insight, evolution_data),
+                summary=self._generate_temporal_summary(base_insight, evolution_data),
+                period=base_insight['metadata']['period']
+            )
+            
+            aggregated_insights.append(aggregated_insight)
+        
+        return aggregated_insights
+
+    def _generate_similarity_key(self, insight: dict) -> str:
+        """Generate a key for grouping similar insights with enhanced semantic matching."""
+        category = insight['category']
+        insight_type = insight['type']
+        
+        # Extract both content and title for comprehensive analysis
+        full_text = f"{insight.get('title', '')} {insight['content']}".lower()
+        
+        # Define semantic theme patterns with partial word matching
+        theme_patterns = {
+            'usabilidad_interfaz': [
+                'interfaz', 'fácil', 'intuitiv', 'navegación', 'uso', 'sencill', 
+                'simple', 'amigable', 'cómodo', 'accesible', 'claro', 'directo'
+            ],
+            'rendimiento_velocidad': [
+                'rápid', 'lent', 'velocidad', 'carga', 'demora', 'espera', 
+                'tardanza', 'tiempo', 'respuesta', 'fluidez'
+            ],
+            'funcionalidades_features': [
+                'funcional', 'característic', 'opcion', 'herramient', 'feature',
+                'capacidad', 'posibilidad', 'servicio', 'utilidad'
+            ],
+            'problemas_errores': [
+                'problem', 'error', 'bug', 'fallo', 'crash', 'cierra',
+                'falla', 'defect', 'issue', 'inconveniente'
+            ],
+            'costos_precios': [
+                'precio', 'cost', 'caro', 'barato', 'comisión', 'tarifa',
+                'gratis', 'pago', 'suscripción', 'plan'
+            ],
+            'seguridad_privacidad': [
+                'segur', 'proteg', 'privac', 'confianc', 'datos',
+                'información', 'cuenta', 'acceso'
+            ],
+            'soporte_atencion': [
+                'soport', 'ayuda', 'atención', 'servicio', 'respuesta',
+                'consulta', 'duda', 'problema'
+            ],
+            'diseño_visual': [
+                'diseñ', 'visual', 'estét', 'color', 'imagen',
+                'gráfic', 'pantalla', 'botón'
+            ],
+            'contenido_informacion': [
+                'contenido', 'información', 'datos', 'detalle',
+                'descripción', 'texto', 'mensaje'
+            ]
+        }
+        
+        # Find the best matching theme using partial word matching
+        best_theme = 'general'
+        max_matches = 0
+        
+        for theme, keywords in theme_patterns.items():
+            matches = 0
+            for keyword in keywords:
+                # Use partial matching for better semantic grouping
+                if keyword in full_text:
+                    matches += 1
+                    # Give extra weight to exact matches
+                    if f" {keyword} " in f" {full_text} ":
+                        matches += 0.5
+            
+            if matches > max_matches:
+                max_matches = matches
+                best_theme = theme
+        
+        # If no strong theme match found, extract most significant word
+        if max_matches < 1:
+            words = full_text.split()
+            stop_words = {
+                'de', 'la', 'el', 'en', 'y', 'a', 'que', 'es', 'se', 'no', 
+                'fortaleza', 'área', 'mejora', 'insight', 'recomendación',
+                'muy', 'más', 'sin', 'con', 'para', 'una', 'un', 'del', 'al',
+                'los', 'las', 'su', 'por', 'son', 'fue', 'han', 'hace', 'esta',
+                'este', 'esta', 'aplicación', 'app', 'usuario', 'usuarios'
+            }
+            
+            # Find first meaningful word (length > 3, not a stop word)
+            for word in words:
+                if len(word) > 3 and word not in stop_words:
+                    best_theme = word[:10]  # Limit length
+                    break
+        
+        # Create final similarity key
+        return f"{category}_{insight_type}_{best_theme}"
+
+    def _analyze_insight_evolution(self, insight_group: List[dict]) -> dict:
+        """Analyze how an insight has evolved over time."""
+        if len(insight_group) == 1:
+            return {'trend': 'stable', 'frequency': 1, 'periods': 1}
+        
+        # Calculate frequency and trends
+        periods = set(insight['metadata']['period'] for insight in insight_group)
+        recency_scores = [insight['metadata']['recency_score'] for insight in insight_group]
+        
+        # Determine trend based on recency distribution
+        avg_recent_score = sum(recency_scores) / len(recency_scores)
+        
+        if avg_recent_score > 0.7:
+            trend = 'increasing'
+        elif avg_recent_score > 0.3:
+            trend = 'stable'
+        else:
+            trend = 'decreasing'
+        
+        return {
+            'trend': trend,
+            'frequency': len(insight_group),
+            'periods': len(periods),
+            'avg_recency': avg_recent_score
+        }
+
+    def _generate_temporal_change_value(self, base_insight: dict, evolution_data: dict) -> str:
+        """Generate change value considering temporal evolution."""
+        base_change = self._generate_change_value(
+            base_insight['type'], 
+            base_insight['content'],
+            base_insight['raw_data'].get('priority') if base_insight['category'] == 'recommendation' else None
+        )
+        
+        # Return base change without trend indicators
+        return base_change
+
+    def _generate_temporal_summary(self, base_insight: dict, evolution_data: dict) -> str:
+        """Generate summary considering temporal evolution."""
+        base_summary = base_insight['content']
+        
+        # Add temporal context
+        if evolution_data['frequency'] > 1:
+            trend_context = {
+                'increasing': f"(Tendencia creciente - observado en {evolution_data['periods']} períodos)",
+                'decreasing': f"(Tendencia decreciente - {evolution_data['frequency']} menciones históricas)",
+                'stable': f"(Consistente - {evolution_data['frequency']} análisis)"
+            }
+            
+            trend_suffix = trend_context.get(evolution_data['trend'], '')
+            return f"{base_summary} {trend_suffix}"
+        
+        return base_summary
+
+    def _sort_insights_by_temporal_relevance(self, insights: List[InsightItem]) -> List[InsightItem]:
+        """Sort insights by temporal relevance and importance.
+        
+        Sorting priority:
+        1. Negative insights first (more actionable)
+        2. Most recent period first (2025-11 before 2024-12)
+        3. Longer summaries (more detail)
+        """
+        return sorted(insights, key=lambda x: (
+            0 if x.type == "negative" else 1,  # Negative first (more actionable)
+            x.period if x.period != "unknown" else "0000-00",  # Most recent period first (descending)
+            -len(x.summary)  # Then by detail level
+        ), reverse=True)
+
     def _process_analysis_data(self, results: List) -> List[InsightItem]:
         """Process raw analysis data to extract structured insights.
 
@@ -198,7 +527,6 @@ class InsightsService:
                 analysis_data = json.loads(row.json_data)
                 review_date = row.review_date
                 # Extract period from review_date (YYYY-MM format)
-                #TODO: Check with Sebas why the reviewDate(within the json) is different from review_date(column on the table)
                 period =  review_date.strftime("%Y-%m") if review_date else "unknown"
                 # Process strengths as positive insights
                 strengths = analysis_data.get("strengths", [])
