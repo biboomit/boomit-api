@@ -245,7 +245,6 @@ class InsightsService:
 
     def _calculate_recency_score(self, analyzed_at) -> float:
         """Calculate recency score for temporal weighting (0.0 to 1.0)."""
-        from datetime import datetime, timezone
         
         if not analyzed_at:
             return 0.0
@@ -257,7 +256,7 @@ class InsightsService:
         # Calculate days since analysis
         days_diff = (now - analyzed_at).days
         
-        # Exponential decay: recent analyses get higher scores
+        # Linear decay: recent analyses get higher scores
         # Score approaches 0 after ~90 days
         return max(0.0, min(1.0, 1.0 - (days_diff / 90.0)))
 
@@ -317,7 +316,7 @@ class InsightsService:
         
         return insights
 
-    def _apply_temporal_aggregation(self, raw_insights: List[dict], analyses_by_period: dict) -> List[InsightItem]:
+    def _apply_temporal_aggregation(self, raw_insights: List[dict]) -> List[InsightItem]:
         """Apply temporal aggregation logic to merge similar insights across time."""
         # Group insights by similarity
         insight_groups = {}
@@ -429,7 +428,7 @@ class InsightsService:
                 'de', 'la', 'el', 'en', 'y', 'a', 'que', 'es', 'se', 'no', 
                 'fortaleza', 'área', 'mejora', 'insight', 'recomendación',
                 'muy', 'más', 'sin', 'con', 'para', 'una', 'un', 'del', 'al',
-                'los', 'las', 'su', 'por', 'son', 'fue', 'han', 'hace', 'esta',
+                'los', 'las', 'su', 'por', 'son', 'fue', 'han', 'hace', 'está',
                 'este', 'esta', 'aplicación', 'app', 'usuario', 'usuarios'
             }
             
@@ -506,7 +505,7 @@ class InsightsService:
         """
         return sorted(insights, key=lambda x: (
             0 if x.type == "negative" else 1,  # Negative first (more actionable)
-            x.period if x.period != "unknown" else "0000-00",  # Most recent period first (descending)
+            x.period if x.period != "unknown" else "9999-99",  # Most recent period first (descending)
             -len(x.summary)  # Then by detail level
         ), reverse=True)
 
