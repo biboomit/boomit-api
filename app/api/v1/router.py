@@ -1,6 +1,6 @@
 ﻿from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, companies, dashboards, campaigns, product, reviews, apps
+from app.api.v1.endpoints import health, companies, dashboards, campaigns, product, reviews, apps, emerging_themes
 
 api_router = APIRouter()
 
@@ -11,3 +11,4 @@ api_router.include_router(campaigns.router, prefix="/campaigns", tags=["campaign
 api_router.include_router(product.router, prefix="/products", tags=["products"])
 api_router.include_router(reviews.router, prefix="/apps", tags=["apps"])
 api_router.include_router(apps.router, prefix="/apps", tags=["apps"])
+api_router.include_router(emerging_themes.router, prefix="/apps", tags=["apps"])
