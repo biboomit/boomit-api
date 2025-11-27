@@ -5,6 +5,7 @@ import logging
 from app.schemas.emerging_themes import (
     EmergingThemesAnalysisRequest,
     EmergingThemesAnalysisResponse,
+    EmergingThemesResult,
 )
 from app.services.emerging_themes import (
     EmergingThemesService,
@@ -98,35 +99,68 @@ async def analyze_emerging_themes(
     try:
         logger.info(
             f"User {current_user.get('sub', 'unknown')} requested emerging themes "
-            f"analysis for app: {request.app_id}"
+            f"analysis for app: {request.app_id} (force_new: {request.force_new_analysis})"
         )
 
-        # Initiate analysis
-        batch, metadata = await service.analyze_emerging_themes(request.app_id)
-
-        # Build response
-        response = EmergingThemesAnalysisResponse(
-            batch_id=batch.id,
-            status="processing",
-            app_id=metadata["app_id"],
-            app_name=metadata["app_name"],
-            app_category=metadata["app_category"],
-            total_reviews_analyzed=metadata["total_reviews"],
-            analysis_period_start=metadata["start_date"],
-            analysis_period_end=metadata["end_date"],
-            created_at=datetime.utcnow(),
-            message=(
-                f"Análisis iniciado exitosamente. Se están procesando "
-                f"{metadata['total_reviews']} reviews. "
-                f"El procesamiento puede tomar entre 2-6 horas. "
-                f"Use el batch_id '{batch.id}' para consultar el estado."
-            ),
+        # Initiate analysis (with cache check unless forced)
+        batch, metadata = await service.analyze_emerging_themes(
+            request.app_id, 
+            force_new_analysis=request.force_new_analysis
         )
 
-        logger.info(
-            f"Emerging themes analysis initiated successfully. "
-            f"Batch ID: {batch.id}, App: {request.app_id}"
-        )
+        # Check if response is from cache
+        if metadata.get("from_cache"):
+            # Cached response
+            response = EmergingThemesAnalysisResponse(
+                batch_id=metadata["batch_id"],
+                status="completed",  # Cached results are already completed
+                app_id=metadata["app_id"],
+                app_name=metadata["app_name"],
+                app_category=metadata["app_category"],
+                total_reviews_analyzed=metadata["total_reviews"],
+                analysis_period_start=metadata["start_date"],
+                analysis_period_end=metadata["end_date"],
+                created_at=metadata["created_at"],
+                from_cache=True,
+                cache_age_hours=metadata["cache_age_hours"],
+                message=(
+                    f"Análisis encontrado en caché (edad: {metadata['cache_age_hours']:.1f} horas). "
+                    f"Batch ID: '{metadata['batch_id']}'. "
+                    f"Use GET /emerging-themes/{request.app_id}/latest para ver los resultados. "
+                    f"Para forzar un nuevo análisis, use force_new_analysis=true."
+                ),
+            )
+            
+            logger.info(
+                f"Returned cached analysis for {request.app_id}. "
+                f"Batch ID: {metadata['batch_id']}, Age: {metadata['cache_age_hours']:.1f}h"
+            )
+        else:
+            # New batch created
+            response = EmergingThemesAnalysisResponse(
+                batch_id=batch.id,
+                status="processing",
+                app_id=metadata["app_id"],
+                app_name=metadata["app_name"],
+                app_category=metadata["app_category"],
+                total_reviews_analyzed=metadata["total_reviews"],
+                analysis_period_start=metadata["start_date"],
+                analysis_period_end=metadata["end_date"],
+                created_at=datetime.utcnow(),
+                from_cache=False,
+                cache_age_hours=0.0,
+                message=(
+                    f"Análisis iniciado exitosamente. Se están procesando "
+                    f"{metadata['total_reviews']} reviews. "
+                    f"El procesamiento puede tomar entre 2-6 horas. "
+                    f"Use el batch_id '{batch.id}' para consultar el estado."
+                ),
+            )
+            
+            logger.info(
+                f"New emerging themes analysis initiated. "
+                f"Batch ID: {batch.id}, App: {request.app_id}"
+            )
 
         return response
 
@@ -164,3 +198,113 @@ async def analyze_emerging_themes(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please contact support.",
         )
+
+
+@router.get(
+    "/emerging-themes/{app_id}/latest",
+    response_model=EmergingThemesResult,
+    summary="Get latest emerging themes analysis",
+    description="""
+    Retrieves the most recent completed emerging themes analysis for an app.
+    
+    **Use this endpoint to:**
+    - Check if analysis has completed (after receiving batch_id from POST endpoint)
+    - Get cached results without triggering new analysis
+    - View historical analysis results
+    
+    **Returns:**
+    - 200: Analysis completed with themes
+    - 404: No analysis found or app doesn't exist
+    - 202: Analysis in progress (not yet completed)
+    """,
+    responses={
+        200: {
+            "description": "Analysis completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "app_id": "com.example.app",
+                        "app_name": "Mi App",
+                        "app_category": "Finanzas",
+                        "total_reviews_analyzed": 1247,
+                        "analysis_period_start": "2025-08-27T00:00:00Z",
+                        "analysis_period_end": "2025-11-25T23:59:59Z",
+                        "themes": [
+                            {
+                                "tema": "Rechazo de tarjetas de débito",
+                                "relevancia": "Alto",
+                                "indicacion": "Usuarios reportan rechazos frecuentes",
+                                "frecuencia": 47
+                            }
+                        ],
+                        "analyzed_at": "2025-11-25T18:30:00Z"
+                    }
+                }
+            },
+        },
+        202: {"description": "Analysis still processing"},
+        404: {"description": "No analysis found for this app"},
+    },
+    tags=["Emerging Themes Analysis"],
+)
+async def get_latest_emerging_themes(
+    app_id: str,
+    service: EmergingThemesService = Depends(get_emerging_themes_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get the latest completed emerging themes analysis for an app.
+
+    Args:
+        app_id: Application ID
+        service: Injected emerging themes service
+        current_user: Authenticated user from JWT token
+
+    Returns:
+        EmergingThemesResult with themes and metadata
+
+    Raises:
+        HTTPException 404: If no analysis found
+        HTTPException 202: If analysis is still processing
+        HTTPException 500: If database error occurs
+    """
+    try:
+        logger.info(
+            f"User {current_user.get('sub', 'unknown')} requested latest analysis "
+            f"for app: {app_id}"
+        )
+
+        result = await service.get_latest_completed_analysis(app_id)
+
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No emerging themes analysis found for app '{app_id}'",
+            )
+
+        # Check if we only have batch info (still processing)
+        if result.get("status") == "processing":
+            raise HTTPException(
+                status_code=status.HTTP_202_ACCEPTED,
+                detail={
+                    "message": "Analysis is still processing",
+                    "batch_id": result.get("batch_id"),
+                    "estimated_time": "2-6 hours from creation"
+                },
+            )
+
+        logger.info(f"Returning completed analysis for app {app_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error retrieving analysis for app {app_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve analysis. Please try again later.",
+        )
+

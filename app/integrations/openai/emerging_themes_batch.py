@@ -97,6 +97,14 @@ class OpenAIEmergingThemesBatchIntegration:
             "response_format": {"type": "json_object"},
             "temperature": 0.7,
             "max_tokens": 4000,
+            "metadata": {
+                "analysis_period_start": start_date.strftime("%Y-%m-%d"),
+                "analysis_period_end": end_date.strftime("%Y-%m-%d"),
+                "total_reviews_analyzed": total_reviews,
+                "app_id": app_id,
+                "app_name": app_name,
+                "app_category": app_category,
+            },
         }
 
         # Create the batch request line with a unique custom_id

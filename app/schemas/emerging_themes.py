@@ -56,11 +56,16 @@ class EmergingThemesAnalysisRequest(BaseModel):
         description="ID de la aplicación a analizar",
         min_length=1
     )
+    force_new_analysis: bool = Field(
+        default=False,
+        description="Forzar nuevo análisis ignorando caché (útil para debug o actualización inmediata)"
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
-                "app_id": "com.example.app"
+                "app_id": "com.example.app",
+                "force_new_analysis": False
             }
         }
 
@@ -105,6 +110,14 @@ class EmergingThemesAnalysisResponse(BaseModel):
         default_factory=datetime.utcnow,
         description="Fecha y hora de creación del batch"
     )
+    from_cache: bool = Field(
+        default=False,
+        description="Indica si el resultado proviene de caché (true) o es un análisis nuevo (false)"
+    )
+    cache_age_hours: float = Field(
+        default=0.0,
+        description="Edad del análisis en caché en horas (0 si es nuevo)"
+    )
     message: str = Field(
         default="Análisis iniciado. El procesamiento puede tomar entre 2-6 horas. Use el batch_id para consultar el estado.",
         description="Mensaje informativo sobre el estado del análisis"
@@ -122,6 +135,8 @@ class EmergingThemesAnalysisResponse(BaseModel):
                 "analysis_period_start": "2025-08-27T00:00:00Z",
                 "analysis_period_end": "2025-11-25T23:59:59Z",
                 "created_at": "2025-11-25T15:30:00Z",
+                "from_cache": False,
+                "cache_age_hours": 0.0,
                 "message": "Análisis iniciado. El procesamiento puede tomar entre 2-6 horas. Use el batch_id para consultar el estado."
             }
         }
