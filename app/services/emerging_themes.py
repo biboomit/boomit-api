@@ -204,8 +204,8 @@ class EmergingThemesService:
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("start_date", "TIMESTAMP", start_date),
-                bigquery.ScalarQueryParameter("end_date", "TIMESTAMP", end_date),
+                bigquery.ScalarQueryParameter("start_date", "DATE", start_date.date()),
+                bigquery.ScalarQueryParameter("end_date", "DATE", end_date.date()),
             ]
         )
 

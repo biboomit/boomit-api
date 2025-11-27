@@ -28,7 +28,7 @@ def get_emerging_themes_service() -> EmergingThemesService:
     "/emerging-themes",
     response_model=EmergingThemesAnalysisResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Analyze emerging themes from app reviews",
+    summary="Request AI Analysis of emerging themes from app reviews",
     description="""
     Analyzes reviews from the last 90 days to identify emerging themes and patterns.
     
@@ -72,8 +72,7 @@ def get_emerging_themes_service() -> EmergingThemesService:
         400: {"description": "Invalid request or no reviews found"},
         404: {"description": "App not found"},
         500: {"description": "Internal server error"},
-    },
-    tags=["Emerging Themes Analysis"],
+    }
 )
 async def analyze_emerging_themes(
     request: EmergingThemesAnalysisRequest,
@@ -203,9 +202,9 @@ async def analyze_emerging_themes(
 @router.get(
     "/emerging-themes/{app_id}/latest",
     response_model=EmergingThemesResult,
-    summary="Get latest emerging themes analysis",
+    summary="Get latest emerging themes ai analysis",
     description="""
-    Retrieves the most recent completed emerging themes analysis for an app.
+    Retrieves the most recent completed emerging themes ai analysis for an app.
     
     **Use this endpoint to:**
     - Check if analysis has completed (after receiving batch_id from POST endpoint)
@@ -244,8 +243,7 @@ async def analyze_emerging_themes(
         },
         202: {"description": "Analysis still processing"},
         404: {"description": "No analysis found for this app"},
-    },
-    tags=["Emerging Themes Analysis"],
+    }
 )
 async def get_latest_emerging_themes(
     app_id: str,
