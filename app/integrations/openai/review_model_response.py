@@ -55,12 +55,6 @@ class ConfidenceLevel(str, Enum):
     LOW = "low"
 
 
-class ThemeRelevance(str, Enum):
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
 class SentimentSummary(BaseModel):
     overall: SentimentType
     score: int = Field(..., ge=1, le=5)
@@ -96,13 +90,6 @@ class Insight(BaseModel):
     strategicValue: str
 
 
-class EmergingTheme(BaseModel):
-    theme: str
-    relevance: ThemeRelevance
-    indication: str
-    marketImplication: str
-
-
 class Metadata(BaseModel):
     reviewLength: ReviewLength
     analysisConfidence: ConfidenceLevel
@@ -115,7 +102,6 @@ class ReviewAnalysis(BaseModel):
     technicalIssues: List[TechnicalIssue]
     strengths: List[Strength]
     weaknesses: List[Weakness]
-    emergingThemes: List[EmergingTheme]
     recommendations: List[Recommendation]
     insights: List[Insight]
     metadata: Metadata
