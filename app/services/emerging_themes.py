@@ -240,8 +240,6 @@ class EmergingThemesService:
             analysis_id,
             app_id,
             batch_id,
-            app_name,
-            app_category,
             json_data,
             analysis_period_start,
             analysis_period_end,
@@ -273,16 +271,27 @@ class EmergingThemesService:
             themes = []
             if row.json_data:
                 try:
-                    themes = json.loads(row.json_data)
+                    parsed_data = json.loads(row.json_data)
+                    # Handle case where data might be wrapped in {"themes": [...]}
+                    if isinstance(parsed_data, dict) and "themes" in parsed_data:
+                        themes = parsed_data["themes"]
+                    elif isinstance(parsed_data, list):
+                        themes = parsed_data
+                    else:
+                        logger.warning(f"Unexpected JSON structure: {type(parsed_data)}")
+                        themes = []
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse themes JSON: {e}")
                     themes = []
 
+            # Get app metadata (name and category) from maestro table
+            app_metadata = await self._get_app_metadata(app_id)
+            
             return {
                 "app_id": row.app_id,
                 "batch_id": row.batch_id,
-                "app_name": row.app_name,
-                "app_category": row.app_category,
+                "app_name": app_metadata["app_name"] if app_metadata else "Unknown App",
+                "app_category": app_metadata["app_category"] if app_metadata else "Unknown Category",
                 "total_reviews_analyzed": row.total_reviews_analyzed,
                 "analysis_period_start": row.analysis_period_start,
                 "analysis_period_end": row.analysis_period_end,
