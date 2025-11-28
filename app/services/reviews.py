@@ -706,7 +706,6 @@ class ReviewService:
                     "technicalIssues": [],
                     "strengths": [],
                     "weaknesses": [],
-                    "emergingThemes": [],
                     "recommendations": [],
                     "insights": [],
                     "volumeAnalyzed": 0
@@ -778,28 +777,6 @@ class ReviewService:
                     feature = strength.get('feature')
                     if feature:
                         strengths_texts.append(feature)
-            
-            # Emerging themes - aggregate themes with frequency and relevance
-            if 'emergingThemes' in analysis and analysis['emergingThemes']:
-                for theme_data in analysis['emergingThemes']:
-                    theme_text = theme_data.get('theme')
-                    if theme_text:
-                        theme_key = theme_text.lower().strip()
-                        emerging_themes_map[theme_key]['count'] += 1
-                        
-                        # Collect relevance scores for averaging
-                        relevance = theme_data.get('relevance')
-                        if relevance:
-                            relevance_score = {'high': 3, 'medium': 2, 'low': 1}.get(relevance, 2)
-                            emerging_themes_map[theme_key]['relevance_scores'].append(relevance_score)
-                        
-                        # Collect indications and implications
-                        indication = theme_data.get('indication')
-                        if indication:
-                            emerging_themes_map[theme_key]['indications'].append(indication)
-                        market_implication = theme_data.get('marketImplication')
-                        if market_implication:
-                            emerging_themes_map[theme_key]['market_implications'].append(market_implication)
             
             # Weaknesses - extract aspect names  
             if 'weaknesses' in analysis and analysis['weaknesses']:
@@ -958,9 +935,6 @@ class ReviewService:
                     "trendStrength": "high" if theme_data['count'] >= 3 else "medium" if theme_data['count'] >= 2 else "low"
                 })
             
-            # Sort emerging themes by frequency and relevance
-            emerging_themes_list.sort(key=lambda x: (x['frequency'], {'high': 3, 'medium': 2, 'low': 1}[x['relevance']]), reverse=True)
-            response["emergingThemes"] = emerging_themes_list[:10]  # Limit to top 10 themes
 
         # Always include volume analyzed
         response["volumeAnalyzed"] = total_reviews
@@ -975,7 +949,6 @@ class ReviewService:
         response.setdefault("technicalIssues", [])
         response.setdefault("strengths", [])
         response.setdefault("weaknesses", [])
-        response.setdefault("emergingThemes", [])
         response.setdefault("recommendations", [])
         response.setdefault("insights", [])
         
