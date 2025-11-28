@@ -85,14 +85,6 @@ class EmergingThemesAnalysisResponse(BaseModel):
         ..., 
         description="ID de la aplicación analizada"
     )
-    app_name: str = Field(
-        ..., 
-        description="Nombre de la aplicación"
-    )
-    app_category: str = Field(
-        ..., 
-        description="Categoría de la aplicación"
-    )
     total_reviews_analyzed: int = Field(
         ..., 
         ge=0,

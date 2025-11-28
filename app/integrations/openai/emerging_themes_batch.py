@@ -55,7 +55,15 @@ class OpenAIEmergingThemesBatchIntegration:
         )
 
         # Upload and create batch
-        return self._upload_and_create_batch(jsonl_content, app_id)
+        return self._upload_and_create_batch(
+            jsonl_content, 
+            app_id,
+            app_name,
+            app_category,
+            start_date,
+            end_date,
+            len(reviews)
+        )
 
     def _create_emerging_themes_jsonl(
         self,
@@ -97,6 +105,15 @@ class OpenAIEmergingThemesBatchIntegration:
             "response_format": {"type": "json_object"},
             "temperature": 0.7,
             "max_tokens": 4000,
+            "store": True,
+            "metadata": {
+                "analysis_period_start": start_date.strftime("%Y-%m-%d"),
+                "analysis_period_end": end_date.strftime("%Y-%m-%d"),
+                "total_reviews_analyzed": str(total_reviews),
+                "app_id": app_id,
+                "app_name": app_name,
+                "app_category": app_category,
+            },
         }
 
         # Create the batch request line with a unique custom_id
@@ -154,13 +171,27 @@ class OpenAIEmergingThemesBatchIntegration:
         
         Analiza estas reviews e identifica los temas emergentes según las instrucciones proporcionadas en el prompt del sistema."""
 
-    def _upload_and_create_batch(self, jsonl_content: str, app_id: str):
+    def _upload_and_create_batch(
+        self, 
+        jsonl_content: str, 
+        app_id: str,
+        app_name: str,
+        app_category: str,
+        start_date: datetime,
+        end_date: datetime,
+        total_reviews: int
+    ):
         """
         Upload the JSONL file and create a batch job.
 
         Args:
             jsonl_content: JSONL formatted string
             app_id: Application ID for metadata
+            app_name: Application name
+            app_category: Application category
+            start_date: Start date of analysis
+            end_date: End date of analysis
+            total_reviews: Total number of reviews analyzed
 
         Returns:
             Tuple of (uploaded_file, batch)
@@ -171,7 +202,7 @@ class OpenAIEmergingThemesBatchIntegration:
             purpose="batch",
         )
 
-        # Create batch
+        # Create batch with metadata
         batch = self.client.batches.create(
             input_file_id=uploaded_file.id,
             endpoint="/v1/chat/completions",
@@ -179,6 +210,11 @@ class OpenAIEmergingThemesBatchIntegration:
             metadata={
                 "job": "emerging_themes_analysis",
                 "app_id": app_id,
+                "app_name": app_name,
+                "app_category": app_category,
+                "analysis_period_start": start_date.strftime("%Y-%m-%d"),
+                "analysis_period_end": end_date.strftime("%Y-%m-%d"),
+                "total_reviews_analyzed": str(total_reviews),
                 "analysis_type": "reviews_pattern_detection",
             },
         )

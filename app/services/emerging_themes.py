@@ -20,7 +20,9 @@ class EmergingThemesService:
         self.client = bigquery_config.get_client()
         self.reviews_table = bigquery_config.get_table_id("DIM_REVIEWS_HISTORICO")
         self.maestro_table = bigquery_config.get_table_id("DIM_MAESTRO_REVIEWS")
-        self.emerging_themes_table = bigquery_config.get_table_id("EMERGING_THEMES")
+        self.emerging_themes_table = bigquery_config.get_table_id_with_dataset(
+            "AIOutput", "EMERGING_THEMES"
+        )
         self.batch_integration = OpenAIEmergingThemesBatchIntegration()
         self.cache_expiration_hours = 24  # Caché válido por 24 horas
 
@@ -322,8 +324,6 @@ class EmergingThemesService:
         SELECT 
             batch_id,
             app_id,
-            app_name,
-            app_category,
             total_reviews_analyzed,
             analysis_period_start,
             analysis_period_end,
@@ -331,7 +331,7 @@ class EmergingThemesService:
             TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), created_at, HOUR) as age_hours
         FROM `{self.emerging_themes_table}`
         WHERE cache_key = @cache_key
-            AND age_hours <= @expiration_hours
+            AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), created_at, HOUR) <= @expiration_hours
         ORDER BY created_at DESC
         LIMIT 1
         """
@@ -348,6 +348,10 @@ class EmergingThemesService:
         try:
             query_job = self.client.query(query, job_config=job_config)
             results = list(query_job.result())
+            # TODO: log the cache key for debugging
+            logger.debug(f"Cache key used: {cache_key}")
+             # TODO: log the result for debugging
+            logger.debug(f"Cache query results: {results}")
 
             if not results:
                 return None
@@ -356,8 +360,6 @@ class EmergingThemesService:
             return {
                 "batch_id": row.batch_id,
                 "app_id": row.app_id,
-                "app_name": row.app_name,
-                "app_category": row.app_category,
                 "total_reviews": row.total_reviews_analyzed,
                 "start_date": row.analysis_period_start,
                 "end_date": row.analysis_period_end,

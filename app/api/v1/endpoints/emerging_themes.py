@@ -114,8 +114,6 @@ async def analyze_emerging_themes(
                 batch_id=metadata["batch_id"],
                 status="completed",  # Cached results are already completed
                 app_id=metadata["app_id"],
-                app_name=metadata["app_name"],
-                app_category=metadata["app_category"],
                 total_reviews_analyzed=metadata["total_reviews"],
                 analysis_period_start=metadata["start_date"],
                 analysis_period_end=metadata["end_date"],
@@ -140,8 +138,6 @@ async def analyze_emerging_themes(
                 batch_id=batch.id,
                 status="processing",
                 app_id=metadata["app_id"],
-                app_name=metadata["app_name"],
-                app_category=metadata["app_category"],
                 total_reviews_analyzed=metadata["total_reviews"],
                 analysis_period_start=metadata["start_date"],
                 analysis_period_end=metadata["end_date"],
