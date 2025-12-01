@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
+    
+    # WebSocket Configuration
+    WEBSOCKET_AUTH_REQUIRED: bool = Field(default=True)
 
     # Auth0 Configuration - DEPRECATED (commented out)
     # AUTH0_DOMAIN: str = Field(default="your-auth0-domain")
