@@ -1,6 +1,6 @@
 """WebSocket endpoint for real-time batch status notifications."""
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.websocket.connection_manager import manager
 from app.middleware.auth import verify_jwt_token
 from app.core.exceptions import AuthError
@@ -14,15 +14,20 @@ router = APIRouter()
 @router.websocket("/ws/batch-status/{user_id}")
 async def websocket_batch_status(
     websocket: WebSocket, 
-    user_id: str,
-    token: str = Query(None, description="JWT token for authentication (optional for development)")
+    user_id: str
 ):
     """
     WebSocket endpoint for receiving real-time batch completion notifications.
     
     Authentication:
-    - For production: Pass JWT token as query parameter: ?token=YOUR_JWT_TOKEN
+    - For production: Pass JWT token via Sec-WebSocket-Protocol header
+      Example: new WebSocket('ws://api.com/ws/...', ['Bearer.YOUR_JWT_TOKEN'])
     - For development: Token is optional (set WEBSOCKET_AUTH_REQUIRED=false in .env)
+    
+    Security Note:
+    - Tokens are sent via Sec-WebSocket-Protocol header (RFC 6455 standard)
+    - This prevents token leakage in server logs, browser history, and referrer headers
+    - Query string authentication is deprecated for security reasons
     
     Client should send messages in the format:
     {
@@ -42,29 +47,44 @@ async def websocket_batch_status(
     Args:
         websocket: The WebSocket connection
         user_id: The user's ID (from path parameter)
-        token: Optional JWT token for authentication
     """
     # Authentication check (optional for development)
     from app.core.config import settings
     auth_required = settings.WEBSOCKET_AUTH_REQUIRED
     
-    # Accept the connection first (required by FastAPI)
-    await websocket.accept()
+    # Extract token from Sec-WebSocket-Protocol header
+    token = None
+    subprotocols = websocket.headers.get("sec-websocket-protocol", "")
     
+    # Parse subprotocol: expected format is "Bearer.TOKEN"
+    if subprotocols:
+        for subprotocol in subprotocols.split(","):
+            subprotocol = subprotocol.strip()
+            if subprotocol.startswith("Bearer."):
+                token = subprotocol[7:]  # Remove "Bearer." prefix
+                break
+    
+    # Accept the connection with the Bearer subprotocol if token was provided
+    if token:
+        await websocket.accept(subprotocol="Bearer." + token)
+    else:
+        await websocket.accept()
+    
+    # Authenticate if required
     if auth_required:
         if not token:
             logger.warning(f"WebSocket connection rejected: no token provided for {user_id}")
-            await websocket.close(code=1008, reason="Authentication required")
+            await websocket.close(code=1008, reason="Authentication required - use Sec-WebSocket-Protocol header")
             return
         try:
             payload = verify_jwt_token(token)
-            logger.info(f"WebSocket authenticated for user: {user_id}")
+            logger.info(f"✅ WebSocket authenticated for user: {user_id}")
         except AuthError as e:
-            logger.warning(f"WebSocket authentication failed: {e.message}")
+            logger.warning(f"❌ WebSocket authentication failed: {e.message}")
             await websocket.close(code=1008, reason="Authentication failed")
             return
     else:
-        logger.info(f"WebSocket authentication skipped (development mode) for user: {user_id}")
+        logger.info(f"⚠️ WebSocket authentication skipped (development mode) for user: {user_id}")
     
     # Add to connection manager
     manager.active_connections[user_id] = websocket

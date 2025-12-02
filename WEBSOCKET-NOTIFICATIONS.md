@@ -39,9 +39,11 @@ Este documento describe cómo funciona el sistema de notificaciones en tiempo re
 
 ### 1. WebSocket Connection
 
-**URL:** `ws://your-api.com/api/v1/ws/batch-status/{user_id}?token=YOUR_JWT_TOKEN`
+**URL:** `ws://your-api.com/api/v1/ws/batch-status/{user_id}`
 
-**Authentication:** Required in production (set `WEBSOCKET_AUTH_REQUIRED=true`). Pass JWT token as query parameter.
+**Authentication:** Required in production. Pass JWT token via `Sec-WebSocket-Protocol` header.
+
+**Security:** Tokens are sent via WebSocket subprotocol header (RFC 6455), not in URLs. This prevents token leakage in server logs, browser history, and HTTP referrer headers.
 
 **Cliente envía:**
 
@@ -150,10 +152,11 @@ const batchId = batch.id; // "batch_xyz789"
 ### Paso 2: Conectar WebSocket
 
 ```javascript
-// Conectar WebSocket con autenticación
+// Conectar WebSocket con autenticación segura
 const token = "your-jwt-token"; // Obtener del login
 const ws = new WebSocket(
-	`ws://your-api.com/api/v1/ws/batch-status/user123?token=${token}`
+	`ws://your-api.com/api/v1/ws/batch-status/user123`,
+	[`Bearer.${token}`] // Token en subprotocol header (seguro)
 );
 
 ws.onopen = () => {
@@ -207,6 +210,12 @@ SECRET_KEY=your-secret-key-here-change-in-production
 ALGORITHM=HS256
 ```
 
+**⚠️ Security Note:**
+
+- Always use `WEBSOCKET_AUTH_REQUIRED=true` in production
+- Tokens are sent via `Sec-WebSocket-Protocol` header (not in URLs)
+- This prevents token exposure in server logs and browser history
+
 ### Variables de Entorno (download-batch)
 
 ```bash
@@ -226,12 +235,22 @@ BOOMIT_API_WEBHOOK_URL=https://your-boomit-api.com/api/v1
 ### Test WebSocket Connection
 
 ```bash
-# Usando wscat
+# Usando wscat con token en subprotocol header
 npm install -g wscat
-wscat -c "ws://localhost:8000/api/v1/ws/batch-status/test_user?token=YOUR_JWT_TOKEN"
+wscat -c "ws://localhost:8000/api/v1/ws/batch-status/test_user" --subprotocol "Bearer.YOUR_JWT_TOKEN"
+
+# Para desarrollo local sin autenticación (WEBSOCKET_AUTH_REQUIRED=false)
+wscat -c "ws://localhost:8000/api/v1/ws/batch-status/test_user"
 
 # Enviar suscripción
-{"action": "subscribe", "batch_id": "batch_test_emerging_themes_001"}
+{"action": "subscribe", "batch_id": "batch_test123"}
+```
+
+**Generar token para testing:**
+
+```bash
+# En la carpeta boomit-api-utils (fuera del workspace)
+python generate_token.py test_user 24
 ```
 
 ### Test Webhook (Emerging Themes)
@@ -285,6 +304,37 @@ Successfully uploaded 2500 rows to BigQuery table your-project.dataset.table
 Sending webhook notification to https://your-api.com/api/v1/webhook/reviews-batch-completed
 ✅ Webhook notification sent successfully for batch batch_test_emerging_themes_001
 ```
+
+---
+
+## 🔒 Seguridad
+
+### Autenticación WebSocket
+
+**Método actual:** `Sec-WebSocket-Protocol` header (RFC 6455)
+
+**¿Por qué es seguro?**
+
+- ✅ Tokens **NO** aparecen en URLs
+- ✅ No se registran en server logs estándar
+- ✅ No se guardan en historial del navegador
+- ✅ No se exponen vía HTTP Referrer headers
+- ✅ Cumple con estándar WebSocket oficial
+
+**⚠️ Nunca uses:**
+
+```javascript
+// ❌ INSEGURO - Token en query string
+const ws = new WebSocket("ws://api.com/ws/...?token=SECRET");
+
+// ✅ SEGURO - Token en subprotocol header
+const ws = new WebSocket("ws://api.com/ws/...", ["Bearer.SECRET"]);
+```
+
+**Configuración recomendada:**
+
+- **Desarrollo**: `WEBSOCKET_AUTH_REQUIRED=false`
+- **Producción**: `WEBSOCKET_AUTH_REQUIRED=true`
 
 ---
 
