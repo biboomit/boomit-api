@@ -12,7 +12,7 @@ router = APIRouter(
 
 
 class BatchCompletedWebhook(BaseModel):
-    """Schema for batch completion webhook payload."""
+    """Schema for batch completion webhook payload. For emerging themes analysis"""
     
     batch_id: str = Field(..., description="OpenAI batch ID")
     analysis_id: str = Field(..., description="Unique analysis ID (UUID)")
@@ -32,6 +32,25 @@ class BatchCompletedWebhook(BaseModel):
                 "analysis_period_start": "2025-01-01",
                 "analysis_period_end": "2025-01-31",
                 "analyzed_at": "2025-01-31T10:30:00Z"
+            }
+        }
+
+
+class ReviewsBatchCompletedWebhook(BaseModel):
+    """Schema for AI reviews batch completion webhook payload."""
+    
+    batch_id: str = Field(..., description="OpenAI batch ID")
+    app_id: str = Field(..., description="Application ID (e.g., com.example.app)")
+    total_reviews_analyzed: int = Field(..., description="Number of reviews analyzed")
+    analyzed_at: str = Field(..., description="Timestamp when analysis completed")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "batch_id": "batch_xyz789",
+                "app_id": "com.example.app",
+                "total_reviews_analyzed": 2500,
+                "analyzed_at": "2025-12-01T15:45:00Z"
             }
         }
 
@@ -88,4 +107,56 @@ async def batch_completed_webhook(payload: BatchCompletedWebhook):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process batch completion webhook: {str(e)}"
+        )
+
+
+@router.post(
+    "/reviews-batch-completed",
+    status_code=status.HTTP_200_OK,
+    summary="Webhook for AI reviews batch completion notification",
+    description="""
+    This webhook is called by the download-batch service
+    when an OpenAI batch analysis for reviews has completed and results have been saved to BigQuery.
+    
+    It notifies all users subscribed to this batch_id via WebSocket.
+    """
+)
+async def reviews_batch_completed_webhook(payload: ReviewsBatchCompletedWebhook):
+    """
+    Handle AI reviews batch completion webhook and notify subscribed users.
+    
+    Args:
+        payload: The batch completion data from download-batch service
+        
+    Returns:
+        dict: Confirmation message with notification count
+    """
+    try:
+        # Get subscribers before notifying (for count)
+        subscribers_count = 0
+        if payload.batch_id in manager.batch_subscriptions:
+            subscribers_count = len(manager.batch_subscriptions[payload.batch_id])
+        
+        # Notify all subscribed users via WebSocket
+        await manager.notify_batch_completed(
+            batch_id=payload.batch_id,
+            data={
+                "app_id": payload.app_id,
+                "total_reviews_analyzed": payload.total_reviews_analyzed,
+                "analyzed_at": payload.analyzed_at
+            }
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Reviews batch completion notification sent to {subscribers_count} user(s)",
+            "batch_id": payload.batch_id,
+            "subscribers_notified": subscribers_count
+        }
+    
+    except Exception as e:
+        print(f"Error processing reviews batch completion webhook: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process reviews batch completion webhook: {str(e)}"
         )
