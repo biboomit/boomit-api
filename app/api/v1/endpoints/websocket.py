@@ -53,20 +53,28 @@ async def websocket_batch_status(
     auth_required = settings.WEBSOCKET_AUTH_REQUIRED
     
     # Extract token from Sec-WebSocket-Protocol header
+    # Format: Client sends multiple subprotocols: "jwt.bearer.token", "bearer", etc
+    # We look for the token after "jwt.bearer.token" format
     token = None
     subprotocols = websocket.headers.get("sec-websocket-protocol", "")
+    accepted_subprotocol = None
     
-    # Parse subprotocol: expected format is "Bearer.TOKEN"
+    # Parse subprotocol list from client
     if subprotocols:
-        for subprotocol in subprotocols.split(","):
-            subprotocol = subprotocol.strip()
-            if subprotocol.startswith("Bearer."):
-                token = subprotocol[7:]  # Remove "Bearer." prefix
+        subprotocol_list = [s.strip() for s in subprotocols.split(",")]
+        
+        # Look for our custom format: base64url token as subprotocol
+        # Client should send: new WebSocket(url, ["jwt.bearer", tokenValue])
+        for i, subprotocol in enumerate(subprotocol_list):
+            if subprotocol == "jwt.bearer" and i + 1 < len(subprotocol_list):
+                # Next item in list is the token
+                token = subprotocol_list[i + 1]
+                accepted_subprotocol = "jwt.bearer"  # Respond only with protocol name
                 break
     
-    # Accept the connection with the Bearer subprotocol if token was provided
-    if token:
-        await websocket.accept(subprotocol="Bearer." + token)
+    # Accept the connection with protocol name only (not the token)
+    if accepted_subprotocol:
+        await websocket.accept(subprotocol=accepted_subprotocol)
     else:
         await websocket.accept()
     
@@ -78,7 +86,22 @@ async def websocket_batch_status(
             return
         try:
             payload = verify_jwt_token(token)
-            logger.info(f"✅ WebSocket authenticated for user: {user_id}")
+            
+            # Extract user_id from token (JWT standard uses "sub" claim)
+            token_user_id = payload.get("sub") or payload.get("user_id")
+            
+            if not token_user_id:
+                logger.warning(f"❌ Token missing user identifier")
+                await websocket.close(code=1008, reason="Invalid token format")
+                return
+            
+            # Verify token user matches path parameter (authorization check)
+            if token_user_id != user_id:
+                logger.warning(f"❌ Authorization failed: token user '{token_user_id}' != path user '{user_id}'")
+                await websocket.close(code=1008, reason="Unauthorized access")
+                return
+            
+            logger.info(f"✅ WebSocket authenticated and authorized for user: {user_id}")
         except AuthError as e:
             logger.warning(f"❌ WebSocket authentication failed: {e.message}")
             await websocket.close(code=1008, reason="Authentication failed")

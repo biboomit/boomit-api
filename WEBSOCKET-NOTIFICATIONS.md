@@ -39,11 +39,16 @@ Este documento describe cómo funciona el sistema de notificaciones en tiempo re
 
 ### 1. WebSocket Connection
 
-**URL:** `ws://your-api.com/api/v1/ws/batch-status/{user_id}`
+**URL:** `wss://your-api.com/api/v1/ws/batch-status/{user_id}` (production) or `ws://localhost:8000/api/v1/ws/batch-status/{user_id}` (development)
 
 **Authentication:** Required in production. Pass JWT token via `Sec-WebSocket-Protocol` header.
 
-**Security:** Tokens are sent via WebSocket subprotocol header (RFC 6455), not in URLs. This prevents token leakage in server logs, browser history, and HTTP referrer headers.
+**Security:**
+
+- ✅ Always use `wss://` (WebSocket Secure) in production to encrypt token transmission
+- ✅ Tokens are sent via WebSocket subprotocol header (RFC 6455), not in URLs
+- ✅ This prevents token leakage in server logs, browser history, and HTTP referrer headers
+- ❌ Never use `ws://` in production - tokens would be transmitted in plain text
 
 **Cliente envía:**
 
@@ -154,9 +159,15 @@ const batchId = batch.id; // "batch_xyz789"
 ```javascript
 // Conectar WebSocket con autenticación segura
 const token = "your-jwt-token"; // Obtener del login
+
+// Detectar entorno (producción vs desarrollo)
+const isProduction = window.location.protocol === "https:";
+const wsProtocol = isProduction ? "wss://" : "ws://";
+const wsHost = isProduction ? "your-api.com" : "localhost:8000";
+
 const ws = new WebSocket(
-	`ws://your-api.com/api/v1/ws/batch-status/user123`,
-	[`Bearer.${token}`] // Token en subprotocol header (seguro)
+	`${wsProtocol}${wsHost}/api/v1/ws/batch-status/user123`,
+	["jwt.bearer", token] // Protocol name + token as separate subprotocols
 );
 
 ws.onopen = () => {
@@ -235,12 +246,17 @@ BOOMIT_API_WEBHOOK_URL=https://your-boomit-api.com/api/v1
 ### Test WebSocket Connection
 
 ```bash
-# Usando wscat con token en subprotocol header
+# Usando wscat (desarrollo local - ws://)
 npm install -g wscat
-wscat -c "ws://localhost:8000/api/v1/ws/batch-status/test_user" --subprotocol "Bearer.YOUR_JWT_TOKEN"
 
-# Para desarrollo local sin autenticación (WEBSOCKET_AUTH_REQUIRED=false)
+# Con autenticación
+wscat -c "ws://localhost:8000/api/v1/ws/batch-status/test_user" --subprotocol "jwt.bearer" --subprotocol "YOUR_JWT_TOKEN"
+
+# Sin autenticación (solo desarrollo - WEBSOCKET_AUTH_REQUIRED=false)
 wscat -c "ws://localhost:8000/api/v1/ws/batch-status/test_user"
+
+# Para producción usar wss:// (WebSocket Secure)
+wscat -c "wss://your-api.com/api/v1/ws/batch-status/test_user" --subprotocol "jwt.bearer" --subprotocol "YOUR_JWT_TOKEN"
 
 # Enviar suscripción
 {"action": "subscribe", "batch_id": "batch_test123"}
@@ -311,15 +327,16 @@ Sending webhook notification to https://your-api.com/api/v1/webhook/reviews-batc
 
 ### Autenticación WebSocket
 
-**Método actual:** `Sec-WebSocket-Protocol` header (RFC 6455)
+**Método actual:** `Sec-WebSocket-Protocol` header (RFC 6455) + TLS (wss://)
 
 **¿Por qué es seguro?**
 
+- ✅ **wss:// (TLS)** encripta toda la comunicación incluyendo tokens
 - ✅ Tokens **NO** aparecen en URLs
 - ✅ No se registran en server logs estándar
 - ✅ No se guardan en historial del navegador
 - ✅ No se exponen vía HTTP Referrer headers
-- ✅ Cumple con estándar WebSocket oficial
+- ✅ Cumple con estándar WebSocket oficial (RFC 6455)
 
 **⚠️ Nunca uses:**
 
@@ -327,14 +344,20 @@ Sending webhook notification to https://your-api.com/api/v1/webhook/reviews-batc
 // ❌ INSEGURO - Token en query string
 const ws = new WebSocket("ws://api.com/ws/...?token=SECRET");
 
-// ✅ SEGURO - Token en subprotocol header
-const ws = new WebSocket("ws://api.com/ws/...", ["Bearer.SECRET"]);
+// ❌ INSEGURO - ws:// sin TLS en producción (token en texto plano)
+const ws = new WebSocket("ws://api.com/ws/...", ["jwt.bearer", token]);
+
+// ✅ SEGURO - wss:// con TLS + token en subprotocol
+const ws = new WebSocket("wss://api.com/ws/...", ["jwt.bearer", token]);
+
+// ✅ OK para desarrollo local
+const ws = new WebSocket("ws://localhost:8000/ws/...", ["jwt.bearer", token]);
 ```
 
 **Configuración recomendada:**
 
-- **Desarrollo**: `WEBSOCKET_AUTH_REQUIRED=false`
-- **Producción**: `WEBSOCKET_AUTH_REQUIRED=true`
+- **Desarrollo**: `WEBSOCKET_AUTH_REQUIRED=false` + `ws://localhost`
+- **Producción**: `WEBSOCKET_AUTH_REQUIRED=true` + `wss://` (TLS obligatorio)
 
 ---
 
