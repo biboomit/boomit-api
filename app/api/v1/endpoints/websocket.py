@@ -88,7 +88,8 @@ async def websocket_batch_status(
             payload = verify_jwt_token(token)
             
             # Extract user_id from token (JWT standard uses "sub" claim)
-            token_user_id = payload.get("sub") or payload.get("user_id")
+            # Also support legacy formats: "user_id" (snake_case) and "userId" (camelCase)
+            token_user_id = payload.get("sub") or payload.get("user_id") or payload.get("userId")
             
             if not token_user_id:
                 logger.warning(f"❌ Token missing user identifier")
