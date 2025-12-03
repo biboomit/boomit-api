@@ -62,6 +62,87 @@ def get_cloud_run_token(target_url: str) -> str:
         )
 
 
+async def _trigger_cloud_run_batch(
+    cloud_run_url: str,
+    batch_id: str,
+    app_id: str,
+    user_id: str,
+    batch_type: str
+) -> dict:
+    """
+    Common logic for triggering Cloud Run batch processing.
+    
+    Args:
+        cloud_run_url: Base URL of the Cloud Run service
+        batch_id: OpenAI batch ID
+        app_id: Application ID
+        user_id: User ID for logging
+        batch_type: Type of batch for logging (e.g., "emerging themes", "reviews analysis")
+        
+    Returns:
+        Success response dict
+        
+    Raises:
+        HTTPException: If Cloud Run call fails
+    """
+    logger.info(f"User {user_id} triggering {batch_type} batch {batch_id}")
+    
+    # Get authentication token for Cloud Run
+    target_url = f"{cloud_run_url}/upload-data"
+    
+    try:
+        token = get_cloud_run_token(cloud_run_url)
+    except HTTPException:
+        # If token generation fails (e.g., local dev), try without auth
+        logger.warning("Could not generate Cloud Run token, attempting without auth")
+        token = None
+    
+    # Prepare request to Cloud Run
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    
+    payload = {
+        "batch_id": batch_id,
+        "app_id": app_id
+    }
+    
+    # Call Cloud Run service
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(
+                target_url,
+                json=payload,
+                headers=headers
+            )
+            response.raise_for_status()
+            
+            logger.info(f"✅ Successfully triggered Cloud Run for batch {batch_id}")
+            
+            return {
+                "status": "success",
+                "message": "Batch processing triggered successfully",
+                "batch_id": batch_id,
+                "cloud_run_response": response.json()
+            }
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Cloud Run returned error {e.response.status_code}: {e.response.text}")
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"Cloud Run error: {e.response.text}"
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to Cloud Run: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Could not connect to batch processing service"
+            )
+
+
 @router.post("/batch/emerging-themes/trigger")
 async def trigger_emerging_themes_batch(
     request: BatchTriggerRequest,
@@ -86,62 +167,14 @@ async def trigger_emerging_themes_batch(
         HTTPException: If Cloud Run call fails
     """
     user_id = current_user.get("sub") or current_user.get("user_id") or current_user.get("userId")
-    logger.info(f"User {user_id} triggering emerging themes batch {request.batch_id}")
     
-    # Get authentication token for Cloud Run
-    target_url = f"{EMERGING_THEMES_CLOUD_RUN_URL}/upload-data"
-    
-    try:
-        token = get_cloud_run_token(EMERGING_THEMES_CLOUD_RUN_URL)
-    except HTTPException:
-        # If token generation fails (e.g., local dev), try without auth
-        logger.warning("Could not generate Cloud Run token, attempting without auth")
-        token = None
-    
-    # Prepare request to Cloud Run
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    
-    payload = {
-        "batch_id": request.batch_id,
-        "app_id": request.app_id
-    }
-    
-    # Call Cloud Run service
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(
-                target_url,
-                json=payload,
-                headers=headers
-            )
-            response.raise_for_status()
-            
-            logger.info(f"✅ Successfully triggered Cloud Run for batch {request.batch_id}")
-            
-            return {
-                "status": "success",
-                "message": "Batch processing triggered successfully",
-                "batch_id": request.batch_id,
-                "cloud_run_response": response.json()
-            }
-            
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Cloud Run returned error {e.response.status_code}: {e.response.text}")
-            raise HTTPException(
-                status_code=e.response.status_code,
-                detail=f"Cloud Run error: {e.response.text}"
-            )
-        except httpx.RequestError as e:
-            logger.error(f"Failed to connect to Cloud Run: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail="Could not connect to batch processing service"
-            )
+    return await _trigger_cloud_run_batch(
+        cloud_run_url=EMERGING_THEMES_CLOUD_RUN_URL,
+        batch_id=request.batch_id,
+        app_id=request.app_id,
+        user_id=user_id,
+        batch_type="emerging themes"
+    )
 
 
 @router.post("/batch/reviews-analysis/trigger")
@@ -165,58 +198,11 @@ async def trigger_reviews_analysis_batch(
         HTTPException: If Cloud Run call fails
     """
     user_id = current_user.get("sub") or current_user.get("user_id") or current_user.get("userId")
-    logger.info(f"User {user_id} triggering reviews analysis batch {request.batch_id}")
     
-    # Get authentication token for Cloud Run
-    target_url = f"{REVIEWS_ANALYSIS_CLOUD_RUN_URL}/upload-data"
-    
-    try:
-        token = get_cloud_run_token(REVIEWS_ANALYSIS_CLOUD_RUN_URL)
-    except HTTPException:
-        logger.warning("Could not generate Cloud Run token, attempting without auth")
-        token = None
-    
-    # Prepare request to Cloud Run
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    
-    payload = {
-        "batch_id": request.batch_id,
-        "app_id": request.app_id
-    }
-    
-    # Call Cloud Run service
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(
-                target_url,
-                json=payload,
-                headers=headers
-            )
-            response.raise_for_status()
-            
-            logger.info(f"✅ Successfully triggered Cloud Run for batch {request.batch_id}")
-            
-            return {
-                "status": "success",
-                "message": "Batch processing triggered successfully",
-                "batch_id": request.batch_id,
-                "cloud_run_response": response.json()
-            }
-            
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Cloud Run returned error {e.response.status_code}: {e.response.text}")
-            raise HTTPException(
-                status_code=e.response.status_code,
-                detail=f"Cloud Run error: {e.response.text}"
-            )
-        except httpx.RequestError as e:
-            logger.error(f"Failed to connect to Cloud Run: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail="Could not connect to batch processing service"
-            )
+    return await _trigger_cloud_run_batch(
+        cloud_run_url=REVIEWS_ANALYSIS_CLOUD_RUN_URL,
+        batch_id=request.batch_id,
+        app_id=request.app_id,
+        user_id=user_id,
+        batch_type="reviews analysis"
+    )
