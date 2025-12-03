@@ -112,6 +112,8 @@ jobs:
             --from-literal=OPENAI_BATCH_SIZE="${{ secrets.OPENAI_BATCH_SIZE }}" \
             --from-literal=OPENAI_MODEL="${{ secrets.OPENAI_MODEL }}" \
             --from-literal=WEBSOCKET_AUTH_REQUIRED="${{ secrets.WEBSOCKET_AUTH_REQUIRED }}" \
+            --from-literal=EMERGING_THEMES_CLOUD_RUN_URL="${{ secrets.EMERGING_THEMES_CLOUD_RUN_URL }}" \
+            --from-literal=REVIEWS_ANALYSIS_CLOUD_RUN_URL="${{ secrets.REVIEWS_ANALYSIS_CLOUD_RUN_URL }}" \
             --namespace=default \
             --dry-run=client -o yaml | kubectl apply -f -
 

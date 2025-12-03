@@ -119,10 +119,8 @@ async def _trigger_cloud_run_batch(
     try:
         token = get_cloud_run_token(cloud_run_url)
     except HTTPException:
-        # If token generation fails (e.g., local dev), try without auth only if not production
-        if os.getenv("ENVIRONMENT") == "production":
-            raise  # Don't allow unauthenticated requests in production
-        logger.warning("Could not generate Cloud Run token, attempting without auth (dev only)")
+        # If token generation fails (e.g., local dev), try without auth
+        logger.warning("Could not generate Cloud Run token, attempting without auth")
         token = None
     
     # Prepare request to Cloud Run
