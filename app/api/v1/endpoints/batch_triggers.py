@@ -14,22 +14,48 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Cloud Run URLs from environment
-EMERGING_THEMES_CLOUD_RUN_URL = os.getenv(
-    "EMERGING_THEMES_CLOUD_RUN_URL",
-    "https://download-emerging-themes-batch-715418856987.us-central1.run.app"
-)
+# Cloud Run URLs from environment (required)
+EMERGING_THEMES_CLOUD_RUN_URL = os.getenv("EMERGING_THEMES_CLOUD_RUN_URL")
+REVIEWS_ANALYSIS_CLOUD_RUN_URL = os.getenv("REVIEWS_ANALYSIS_CLOUD_RUN_URL")
 
-REVIEWS_ANALYSIS_CLOUD_RUN_URL = os.getenv(
-    "REVIEWS_ANALYSIS_CLOUD_RUN_URL", 
-    "https://download-batch-715418856987.us-central1.run.app"
-)
+# Validate required environment variables
+if not EMERGING_THEMES_CLOUD_RUN_URL:
+    raise ValueError("EMERGING_THEMES_CLOUD_RUN_URL environment variable is required")
+if not REVIEWS_ANALYSIS_CLOUD_RUN_URL:
+    raise ValueError("REVIEWS_ANALYSIS_CLOUD_RUN_URL environment variable is required")
 
 
 class BatchTriggerRequest(BaseModel):
     """Request model for triggering batch processing."""
     batch_id: str
     app_id: str
+
+
+def extract_user_id(current_user: dict) -> str:
+    """
+    Extract user_id from JWT payload supporting multiple formats.
+    
+    Supports common JWT claim formats:
+    - sub (standard JWT claim)
+    - user_id (snake_case)
+    - userId (camelCase)
+    
+    Args:
+        current_user: JWT payload dict
+        
+    Returns:
+        User identifier string
+        
+    Raises:
+        HTTPException: If no user identifier found
+    """
+    user_id = current_user.get("sub") or current_user.get("user_id") or current_user.get("userId")
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Token missing user identifier"
+        )
+    return user_id
 
 
 def get_cloud_run_token(target_url: str) -> str:
@@ -93,8 +119,10 @@ async def _trigger_cloud_run_batch(
     try:
         token = get_cloud_run_token(cloud_run_url)
     except HTTPException:
-        # If token generation fails (e.g., local dev), try without auth
-        logger.warning("Could not generate Cloud Run token, attempting without auth")
+        # If token generation fails (e.g., local dev), try without auth only if not production
+        if os.getenv("ENVIRONMENT") == "production":
+            raise  # Don't allow unauthenticated requests in production
+        logger.warning("Could not generate Cloud Run token, attempting without auth (dev only)")
         token = None
     
     # Prepare request to Cloud Run
@@ -164,9 +192,9 @@ async def trigger_emerging_themes_batch(
         Success response from Cloud Run
         
     Raises:
-        HTTPException: If Cloud Run call fails
+        HTTPException: If Cloud Run call fails or token missing user identifier
     """
-    user_id = current_user.get("sub") or current_user.get("user_id") or current_user.get("userId")
+    user_id = extract_user_id(current_user)
     
     return await _trigger_cloud_run_batch(
         cloud_run_url=EMERGING_THEMES_CLOUD_RUN_URL,
@@ -195,9 +223,9 @@ async def trigger_reviews_analysis_batch(
         Success response from Cloud Run
         
     Raises:
-        HTTPException: If Cloud Run call fails
+        HTTPException: If Cloud Run call fails or token missing user identifier
     """
-    user_id = current_user.get("sub") or current_user.get("user_id") or current_user.get("userId")
+    user_id = extract_user_id(current_user)
     
     return await _trigger_cloud_run_batch(
         cloud_run_url=REVIEWS_ANALYSIS_CLOUD_RUN_URL,
