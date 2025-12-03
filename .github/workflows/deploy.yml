@@ -114,7 +114,6 @@ jobs:
             --from-literal=WEBSOCKET_AUTH_REQUIRED="${{ secrets.WEBSOCKET_AUTH_REQUIRED }}" \
             --from-literal=EMERGING_THEMES_CLOUD_RUN_URL="${{ secrets.EMERGING_THEMES_CLOUD_RUN_URL }}" \
             --from-literal=REVIEWS_ANALYSIS_CLOUD_RUN_URL="${{ secrets.REVIEWS_ANALYSIS_CLOUD_RUN_URL }}" \
-            --from-literal=ENVIRONMENT="production" \
             --namespace=default \
             --dry-run=client -o yaml | kubectl apply -f -
 
