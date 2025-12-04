@@ -708,10 +708,11 @@ class ReviewService:
                     "weaknesses": [],
                     "recommendations": [],
                     "insights": [],
-                    "volumeAnalyzed": 0
+                    "volumeAnalyzed": 0,
+                    "analyzedAt": None
                 }
             
-            # Parse all JSON data
+            # Parse all JSON data and get the most recent analyzed_at
             analyses = []
             for row in rows:
                 json_data = row["json_data"]
@@ -722,6 +723,9 @@ class ReviewService:
             
             # Aggregate data using only actual content from analyses
             aggregated_data = self._aggregate_analyses(analyses)
+            
+            # Add the analyzedAt timestamp
+            aggregated_data["analyzedAt"] = rows[0]["analyzed_at"].isoformat() if rows[0]["analyzed_at"] else None
             
             return aggregated_data
             
