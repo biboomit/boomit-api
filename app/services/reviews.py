@@ -712,7 +712,7 @@ class ReviewService:
                     "analyzedAt": None
                 }
             
-            # Parse all JSON data and get the most recent analyzed_at
+            # Parse all JSON data
             analyses = []
             for row in rows:
                 json_data = row["json_data"]
