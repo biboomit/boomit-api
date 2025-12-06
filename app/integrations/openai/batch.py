@@ -2,7 +2,6 @@ import io
 import json
 from app.core.config import OpenAIConfig
 from openai import OpenAI
-from openai.lib._parsing._responses import type_to_text_format_param
 from app.integrations.openai.review_model_response import ReviewAnalysis
 from datetime import datetime, date
 
@@ -48,17 +47,21 @@ class OpenAIBatchIntegration:
                 # Create the request body following OpenAI batch format
                 body = {
                     "model": OpenAIConfig().get_model(),
-                    "input": [
+                    "messages": [
                         {
                             "role": "system",
                             "content": OpenAIConfig().batch_system_prompt(),
                         },
                         {"role": "user", "content": f"{score}: {content}"},
                     ],
-                    "text": {
-                        "format": type_to_text_format_param(ReviewAnalysis),
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "ReviewAnalysis",
+                            "strict": True,
+                            "schema": ReviewAnalysis.model_json_schema()
+                        }
                     },
-                    "prompt_cache_key": "review_analysis_v1",
                     "metadata": {
                         "review_date": date.isoformat(),
                     },
@@ -68,7 +71,7 @@ class OpenAIBatchIntegration:
                 request_line = {
                     "custom_id": f"batch-review-{batch_idx}-item-{item_idx}",
                     "method": "POST",
-                    "url": "/v1/responses",
+                    "url": "/v1/chat/completions",
                     "body": body,
                 }
 
@@ -87,7 +90,7 @@ class OpenAIBatchIntegration:
 
         batch = client.batches.create(
             input_file_id=uploaded_file.id,
-            endpoint="/v1/responses",
+            endpoint="/v1/chat/completions",
             completion_window="24h",
             metadata={"job": "review_analysis_v1"},
         )
