@@ -19,7 +19,7 @@ class AppService:
     DEFAULT_DOWNLOADS = 0
     
     # Cloud Run scraper endpoints - Required environment variables (fail-fast if not set)
-    ANDROID_SCRAPER_URL = os.environ["ANDROID_SCRAPER_URL"]s
+    ANDROID_SCRAPER_URL = os.environ["ANDROID_SCRAPER_URL"]
     IOS_SCRAPER_URL = os.environ["IOS_SCRAPER_URL"]
     
     def __init__(self) -> None:
