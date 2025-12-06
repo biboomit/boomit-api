@@ -473,11 +473,9 @@ class AppService:
         
         try:
             # Call Cloud Run scraper
-            # Timeout: 15s connect, 120s read (scraping can take time but shouldn't hang indefinitely)
             logger.info(f"Calling {store} scraper for app: {app_id}")
             
-            timeout = httpx.Timeout(connect=15.0, read=120.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     scraper_url,
                     json={"app_id": app_id, "country": country}
