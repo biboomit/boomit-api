@@ -23,101 +23,106 @@ def get_insights_service() -> InsightsService:
     return insights_service
 
 
-@router.get("/search", response_model=AppSearchResponse)
-async def search_apps(
-    appName: str = Query(..., description="Name of the app to search for (partial matching supported)"),
-    store: Optional[str] = Query(
-        None, 
-        description="App store filter: 'android' or 'ios'",
+@router.get("/search", response_model=AppDetailsResponse)
+async def search_app_by_id(
+    appId: str = Query(..., description="App ID to search for (exact match required)"),
+    store: str = Query(
+        ..., 
+        description="App store: 'android' or 'ios'",
         regex="^(?i)(android|ios)$"
     ),
-    country: Optional[str] = Query(
-        None, 
-        description="Country code filter (ISO 2-letter format, e.g., 'US', 'VE', 'gt')",
+    country: str = Query(
+        ..., 
+        description="Country code (ISO 2-letter format, e.g., 'US', 'VE', 'gt')",
         regex="^(?i)[A-Z]{2}$"
     ),
     service: AppService = Depends(get_app_service),
     current_user: dict = Depends(get_current_user),
 ):
-    """Search for apps by name with optional filters.
+    """Search for an app by ID with store and country filters.
 
-    This endpoint searches through DIM_MAESTRO_REVIEWS for apps whose names
-    contain the specified search term, with optional filtering by store and country.
+    This endpoint searches for an app by its exact app ID. If the app exists in 
+    DIM_MAESTRO_REVIEWS, it returns the stored data. If not found, it scrapes 
+    the app data from the appropriate store (Google Play or App Store), inserts 
+    it into the database, and returns the information.
     
-    Rating information is retrieved from DIM_REVIEWS_HISTORICO for each app.
+    The scraping process also fetches reviews from the last 7 days if no reviews 
+    exist for the app.
 
     Args:
-        appName: Name or partial name of the app to search for (required)
-        store: Optional filter by app store ('android' or 'ios')
-        country: Optional filter by country code (ISO 2-letter format)
+        appId: Exact app ID to search for (e.g., 'com.example.app') (required)
+        store: App store type - 'android' or 'ios' (required)
+        country: Country code in ISO 2-letter format (required)
         service: App service dependency
         current_user: Authenticated user dependency
 
     Returns:
-        AppSearchResponse containing an array of matching apps with complete information:
+        AppDetailsResponse containing complete app information:
         - Basic app metadata (name, developer, category, etc.)
         - Download statistics  
         - Average rating and total ratings from reviews
         - App store information
 
     Raises:
-        HTTPException: 400 for invalid parameters, 500 for server errors
+        HTTPException: 
+            - 400 for invalid parameters
+            - 404 if app not found in store
+            - 500 for server errors
 
     Examples:
-        GET /api/v1/apps/search?appName=farmatodo
-        GET /api/v1/apps/search?appName=banco&store=android
-        GET /api/v1/apps/search?appName=delivery&store=android&country=VE
+        GET /api/v1/apps/search?appId=com.lulubit&store=android&country=gt
         
         Response:
         {
-            "apps": [
-                {
-                    "appId": "com.farmatodo.app",
-                    "appName": "Farmatodo",
-                    "store": "android",
-                    "developer": "Farmatodo Inc.",
-                    "ratingAverage": 4.2,
-                    "totalRatings": 12543,
-                    "downloads": 2100000,
-                    "lastUpdate": "2024-08-10",
-                    "iconUrl": "https://play-lh.googleusercontent.com/...",
-                    "category": "Health & Fitness"
-                }
-            ]
+            "appId": "com.lulubit",
+            "appName": "Lulubit: Compra Bitcoin Cripto",
+            "store": "android",
+            "developer": "Lulubit",
+            "ratingAverage": 4.53,
+            "totalRatings": 430,
+            "downloads": 50000,
+            "lastUpdate": "2025-11-03",
+            "iconUrl": "https://play-lh.googleusercontent.com/...",
+            "category": "Finanzas"
         }
     """
     
-    # Validar parámetros de entrada
-    if not appName or not appName.strip():
+    # Validate parameters
+    if not appId or not appId.strip():
         raise HTTPException(
             status_code=400, 
-            detail="appName parameter cannot be empty"
+            detail="appId parameter cannot be empty"
         )
     
-    # Normalizar store si se proporciona
-    if store:
-        store = store.lower()
+    # Normalize parameters
+    store = store.lower()
+    country = country.lower()
     
     try:
-        logger.info(f"Searching apps with name: '{appName}', store: {store}, country: {country}")
+        logger.info(f"Searching app by ID: {appId}, store: {store}, country: {country}")
         
-        # Buscar aplicaciones
-        apps = await service.search_apps(
-            app_name=appName.strip(),
+        # Get or create app (scrapes if not exists)
+        app_details = await service.get_or_create_app(
+            app_id=appId.strip(),
             store=store,
             country=country
         )
 
-        logger.info(f"Search completed for '{appName}' - found {len(apps)} apps")
+        logger.info(f"Successfully retrieved/created app: {appId}")
+        return app_details
 
-        # Retornar respuesta con array de apps
-        return AppSearchResponse(apps=apps)
-
+    except ValueError as ve:
+        # App not found in store or scraping error
+        logger.error(f"App not found or scraping error for {appId}: {ve}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"App '{appId}' not found in {store} store: {str(ve)}"
+        )
     except DatabaseConnectionError as e:
-        logger.error(f"Database error in search_apps: {e}")
+        logger.error(f"Database error in search_app_by_id: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error in search_apps for '{appName}': {e}")
+        logger.error(f"Unexpected error in search_app_by_id for '{appId}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

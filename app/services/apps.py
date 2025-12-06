@@ -1,10 +1,12 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
 from app.schemas.apps import AppDetailsResponse
 from app.core.config import bigquery_config
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
+import httpx
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,10 @@ class AppService:
     DEFAULT_CATEGORY = 'Unknown Category'
     DEFAULT_ICON_URL = ''
     DEFAULT_DOWNLOADS = 0
+    
+    # Cloud Run scraper endpoints - Required environment variables (fail-fast if not set)
+    ANDROID_SCRAPER_URL = os.environ["ANDROID_SCRAPER_URL"]
+    IOS_SCRAPER_URL = os.environ["IOS_SCRAPER_URL"]
     
     def __init__(self) -> None:
         self.client = bigquery_config.get_client()
@@ -312,6 +318,193 @@ class AppService:
         except Exception as e:
             logger.error(f"Error getting app details for {app_id}: {e}")
             raise DatabaseConnectionError(f"Error querying the database: {e}")
+
+    async def get_or_create_app(
+        self,
+        app_id: str,
+        store: str,
+        country: str
+    ) -> AppDetailsResponse:
+        """
+        Get app from database or scrape and create if it doesn't exist.
+        
+        Args:
+            app_id: App ID to search for
+            store: Store type ('android' or 'ios')
+            country: Country code
+            
+        Returns:
+            AppDetailsResponse with app details
+            
+        Raises:
+            DatabaseConnectionError: If database operations fail
+            ValueError: If scraping fails or store is invalid
+        """
+        try:
+            # First, try to get from database
+            logger.info(f"Searching for app in database: {app_id}")
+            existing_app = await self._get_app_by_id(app_id, store, country)
+            
+            if existing_app:
+                logger.info(f"App found in database: {app_id}")
+                return existing_app
+            
+            # App not found, scrape and insert
+            logger.info(f"App not found in database, scraping: {app_id}")
+            app_details = await self._scrape_and_insert_app(app_id, store, country)
+            
+            return app_details
+            
+        except ValueError as ve:
+            # Scraping errors (app not found in store, etc.)
+            logger.error(f"Scraping error for app {app_id}: {ve}")
+            raise
+        except Exception as e:
+            logger.error(f"Error in get_or_create_app for {app_id}: {e}")
+            raise DatabaseConnectionError(f"Error processing app request: {e}")
+    
+    async def _get_app_by_id(
+        self,
+        app_id: str,
+        store: str,
+        country: str
+    ) -> Optional[AppDetailsResponse]:
+        """
+        Get app from database by app_id, store, and country.
+        
+        Args:
+            app_id: App ID to search for
+            store: Store type ('android' or 'ios')
+            country: Country code
+            
+        Returns:
+            AppDetailsResponse if found, None otherwise
+        """
+        query = f"""
+        SELECT 
+            app_id,
+            app_name,
+            LOWER(SO) as store,
+            COALESCE(app_desarrollador, '{self.DEFAULT_DEVELOPER}') as developer,
+            COALESCE(app_descargas, {self.DEFAULT_DOWNLOADS}) as downloads,
+            COALESCE(app_icon_url, '{self.DEFAULT_ICON_URL}') as icon_url,
+            COALESCE(app_categoria, '{self.DEFAULT_CATEGORY}') as category,
+            COALESCE(fecha_actualizacion, CURRENT_DATE()) as last_update
+        FROM `{self.maestro_table}`
+        WHERE LOWER(app_id) = LOWER(@app_id)
+          AND LOWER(SO) = LOWER(@store)
+          AND LOWER(country_code) = LOWER(@country)
+        LIMIT 1
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
+                bigquery.ScalarQueryParameter("store", "STRING", store),
+                bigquery.ScalarQueryParameter("country", "STRING", country),
+            ]
+        )
+        
+        try:
+            result = self.client.query(query, job_config=job_config)
+            rows = list(result)
+            
+            if not rows:
+                return None
+            
+            row = rows[0]
+            
+            # Get ratings for this app
+            ratings = await self._get_app_ratings(app_id)
+            
+            # Process last_update
+            last_update = row.last_update
+            if isinstance(last_update, datetime):
+                last_update = last_update.date()
+            elif last_update is None:
+                last_update = date.today()
+            
+            return AppDetailsResponse(
+                app_id=row.app_id,
+                app_name=row.app_name,
+                store=row.store,
+                developer=row.developer,
+                downloads=row.downloads,
+                icon_url=row.icon_url,
+                category=row.category,
+                last_update=last_update,
+                rating_average=ratings.get('average_rating'),
+                total_ratings=ratings.get('total_ratings')
+            )
+            
+        except Exception as e:
+            logger.error(f"Error querying app {app_id}: {e}")
+            raise DatabaseConnectionError(f"Error querying database: {e}")
+    
+    async def _scrape_and_insert_app(
+        self,
+        app_id: str,
+        store: str,
+        country: str
+    ) -> AppDetailsResponse:
+        """
+        Call Cloud Run scraper to scrape and insert app data into BigQuery.
+        
+        Args:
+            app_id: App ID to scrape
+            store: Store type ('android' or 'ios')
+            country: Country code
+            
+        Returns:
+            AppDetailsResponse with app details from database
+            
+        Raises:
+            ValueError: If scraping fails or store is invalid
+        """
+        store_lower = store.lower()
+        
+        # Select appropriate scraper URL
+        if store_lower == 'android':
+            scraper_url = f"{self.ANDROID_SCRAPER_URL}/scrape"
+        elif store_lower == 'ios':
+            scraper_url = f"{self.IOS_SCRAPER_URL}/scrape"
+        else:
+            raise ValueError(f"Invalid store type: {store}. Must be 'android' or 'ios'")
+        
+        try:
+            # Call Cloud Run scraper
+            logger.info(f"Calling {store} scraper for app: {app_id}")
+            
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(
+                    scraper_url,
+                    json={"app_id": app_id, "country": country}
+                )
+                
+                if response.status_code == 404:
+                    raise ValueError(f"App '{app_id}' not found in {store} store")
+                
+                if response.status_code != 200:
+                    error_msg = response.json().get('error', 'Unknown error')
+                    raise ValueError(f"Scraper error: {error_msg}")
+                
+                result = response.json()
+                logger.info(f"Scraper response: {result}")
+            
+            # Now fetch the app from database (scraper already inserted it)
+            app = await self._get_app_by_id(app_id, store_lower, country)
+            
+            if not app:
+                raise ValueError(f"App was scraped but not found in database: {app_id}")
+            
+            return app
+            
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling scraper for {app_id}: {e}")
+            raise ValueError(f"Failed to call scraper service: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error scraping app {app_id}: {e}")
+            raise ValueError(f"Failed to scrape app '{app_id}': {str(e)}")
 
 
 # Singleton instance
