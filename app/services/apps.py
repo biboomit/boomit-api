@@ -3,11 +3,10 @@ from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
 from app.schemas.apps import AppDetailsResponse
 from app.core.config import bigquery_config
-from app.integrations.scrapers.google_play import google_play_scraper
-from app.integrations.scrapers.app_store import app_store_scraper
 from datetime import datetime, date, timedelta
 import logging
-import uuid
+import httpx
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +17,10 @@ class AppService:
     DEFAULT_CATEGORY = 'Unknown Category'
     DEFAULT_ICON_URL = ''
     DEFAULT_DOWNLOADS = 0
+    
+    # Cloud Run scraper endpoints - Required environment variables (fail-fast if not set)
+    ANDROID_SCRAPER_URL = os.environ["ANDROID_SCRAPER_URL"]s
+    IOS_SCRAPER_URL = os.environ["IOS_SCRAPER_URL"]
     
     def __init__(self) -> None:
         self.client = bigquery_config.get_client()
@@ -445,7 +448,7 @@ class AppService:
         country: str
     ) -> AppDetailsResponse:
         """
-        Scrape app data from store and insert into database.
+        Call Cloud Run scraper to scrape and insert app data into BigQuery.
         
         Args:
             app_id: App ID to scrape
@@ -453,242 +456,55 @@ class AppService:
             country: Country code
             
         Returns:
-            AppDetailsResponse with scraped app details
+            AppDetailsResponse with app details from database
             
         Raises:
             ValueError: If scraping fails or store is invalid
         """
         store_lower = store.lower()
         
-        # Select appropriate scraper
+        # Select appropriate scraper URL
         if store_lower == 'android':
-            scraper = google_play_scraper
+            scraper_url = f"{self.ANDROID_SCRAPER_URL}/scrape"
         elif store_lower == 'ios':
-            scraper = app_store_scraper
+            scraper_url = f"{self.IOS_SCRAPER_URL}/scrape"
         else:
             raise ValueError(f"Invalid store type: {store}. Must be 'android' or 'ios'")
         
         try:
-            # Scrape app metadata
-            logger.info(f"Scraping app data from {store}: {app_id}")
-            raw_app_data = scraper.fetch_app_data(app_id, country)
-            app_info = scraper.extract_app_info(raw_app_data)
+            # Call Cloud Run scraper
+            logger.info(f"Calling {store} scraper for app: {app_id}")
             
-            # Insert into DIM_MAESTRO_REVIEWS
-            await self._insert_app_to_maestro(app_id, store_lower, country, app_info)
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(
+                    scraper_url,
+                    json={"app_id": app_id, "country": country}
+                )
+                
+                if response.status_code == 404:
+                    raise ValueError(f"App '{app_id}' not found in {store} store")
+                
+                if response.status_code != 200:
+                    error_msg = response.json().get('error', 'Unknown error')
+                    raise ValueError(f"Scraper error: {error_msg}")
+                
+                result = response.json()
+                logger.info(f"Scraper response: {result}")
             
-            # Scrape and insert reviews (last 7 days, only if no reviews exist)
-            await self._scrape_and_insert_reviews(app_id, store_lower, country, scraper)
+            # Now fetch the app from database (scraper already inserted it)
+            app = await self._get_app_by_id(app_id, store_lower, country)
             
-            # Get ratings after inserting reviews
-            ratings = await self._get_app_ratings(app_id)
+            if not app:
+                raise ValueError(f"App was scraped but not found in database: {app_id}")
             
-            # Return app details
-            return AppDetailsResponse(
-                app_id=app_id,
-                app_name=app_info['app_name'],
-                store=store_lower,
-                developer=app_info['app_desarrollador'],
-                downloads=app_info['app_descargas'],
-                icon_url=app_info['app_icon_url'],
-                category=app_info['app_categoria'],
-                last_update=date.today(),
-                rating_average=ratings.get('average_rating') or app_info.get('rating_average'),
-                total_ratings=ratings.get('total_ratings') or app_info.get('total_ratings', 0)
-            )
+            return app
             
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling scraper for {app_id}: {e}")
+            raise ValueError(f"Failed to call scraper service: {str(e)}")
         except Exception as e:
             logger.error(f"Error scraping app {app_id}: {e}")
             raise ValueError(f"Failed to scrape app '{app_id}': {str(e)}")
-    
-    async def _insert_app_to_maestro(
-        self,
-        app_id: str,
-        store: str,
-        country: str,
-        app_info: Dict[str, Any]
-    ) -> None:
-        """
-        Insert app metadata into DIM_MAESTRO_REVIEWS table.
-        
-        Args:
-            app_id: App ID
-            store: Store type
-            country: Country code
-            app_info: Dictionary with app information
-        """
-        # Generate review_id as combination of app_id + SO + country_code
-        review_id = f"{app_id}_{store}_{country}"
-        
-        now = datetime.now()
-        
-        # Prepare row data
-        row_data = {
-            'review_id': review_id,
-            'empresa_id': None,  # TODO: To be defined
-            'canal_id': None,    # TODO: To be defined
-            'app_id': app_id,
-            'app_name': app_info['app_name'],
-            'SO': store,
-            'lang_code': 'es',  # Default Spanish
-            'country_code': country,
-            'app_descargas': app_info['app_descargas'],
-            'app_desarrollador': app_info['app_desarrollador'],
-            'app_categoria': app_info['app_categoria'],
-            'app_icon_url': app_info['app_icon_url'],
-            'fecha_creacion': now,
-            'fecha_actualizacion': now,
-        }
-        
-        try:
-            logger.info(f"Inserting app into DIM_MAESTRO_REVIEWS: {app_id}")
-            
-            # Insert row
-            errors = self.client.insert_rows_json(self.maestro_table, [row_data])
-            
-            if errors:
-                logger.error(f"Errors inserting app {app_id}: {errors}")
-                raise DatabaseConnectionError(f"Failed to insert app: {errors}")
-            
-            logger.info(f"Successfully inserted app {app_id} into DIM_MAESTRO_REVIEWS")
-            
-        except Exception as e:
-            logger.error(f"Error inserting app {app_id}: {e}")
-            raise DatabaseConnectionError(f"Database insert error: {e}")
-    
-    async def _scrape_and_insert_reviews(
-        self,
-        app_id: str,
-        store: str,
-        country: str,
-        scraper: Any,
-        days: int = 7
-    ) -> None:
-        """
-        Scrape and insert reviews for an app (last N days, only new reviews).
-        
-        Args:
-            app_id: App ID
-            store: Store type
-            country: Country code
-            scraper: Scraper instance to use
-            days: Number of days to look back (default: 7)
-        """
-        try:
-            # Check if reviews already exist for this app
-            existing_reviews_count = await self._count_existing_reviews(app_id)
-            
-            if existing_reviews_count > 0:
-                logger.info(f"App {app_id} already has {existing_reviews_count} reviews, skipping scraping")
-                return
-            
-            # Scrape reviews from last N days
-            logger.info(f"Scraping reviews for {app_id} from last {days} days")
-            reviews = scraper.fetch_recent_reviews(app_id, country, days)
-            
-            if not reviews:
-                logger.info(f"No reviews found for {app_id}")
-                return
-            
-            # Get existing review dates to avoid duplicates
-            existing_dates = await self._get_existing_review_dates(app_id)
-            
-            # Filter out reviews that already exist
-            new_reviews = []
-            now = datetime.now()
-            
-            for review in reviews:
-                review_date = review['at']
-                review_content = review['content']
-                
-                # Check if review already exists (by date and content)
-                if not self._review_exists(existing_dates, review_date, review_content):
-                    review_id = str(uuid.uuid4())
-                    
-                    new_reviews.append({
-                        'review_historico_id': review_id,
-                        'app_id': app_id,
-                        'fecha': review_date,
-                        'content': review_content,
-                        'score': review['score'],
-                        'source': review['source'],
-                        'created_at': now,
-                        'updated_at': now,
-                    })
-            
-            if not new_reviews:
-                logger.info(f"No new reviews to insert for {app_id}")
-                return
-            
-            # Insert reviews in batches
-            logger.info(f"Inserting {len(new_reviews)} new reviews for {app_id}")
-            errors = self.client.insert_rows_json(self.historico_table, new_reviews)
-            
-            if errors:
-                logger.error(f"Errors inserting reviews for {app_id}: {errors}")
-                raise DatabaseConnectionError(f"Failed to insert reviews: {errors}")
-            
-            logger.info(f"Successfully inserted {len(new_reviews)} reviews for {app_id}")
-            
-        except Exception as e:
-            logger.error(f"Error scraping/inserting reviews for {app_id}: {e}")
-            # Don't raise here - reviews are optional, app metadata is more important
-            logger.warning(f"Continuing without reviews for {app_id}")
-    
-    async def _count_existing_reviews(self, app_id: str) -> int:
-        """Count existing reviews for an app."""
-        query = f"""
-        SELECT COUNT(*) as count
-        FROM `{self.historico_table}`
-        WHERE app_id = @app_id
-        """
-        
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("app_id", "STRING", app_id)
-            ]
-        )
-        
-        try:
-            result = self.client.query(query, job_config=job_config)
-            rows = list(result)
-            return rows[0].count if rows else 0
-        except Exception as e:
-            logger.error(f"Error counting reviews for {app_id}: {e}")
-            return 0
-    
-    async def _get_existing_review_dates(self, app_id: str) -> List[Dict[str, Any]]:
-        """Get existing review dates and content hashes for duplicate detection."""
-        query = f"""
-        SELECT fecha, content
-        FROM `{self.historico_table}`
-        WHERE app_id = @app_id
-        """
-        
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("app_id", "STRING", app_id)
-            ]
-        )
-        
-        try:
-            result = self.client.query(query, job_config=job_config)
-            return [{'fecha': row.fecha, 'content': row.content} for row in result]
-        except Exception as e:
-            logger.error(f"Error getting existing review dates for {app_id}: {e}")
-            return []
-    
-    def _review_exists(
-        self,
-        existing_reviews: List[Dict[str, Any]],
-        review_date: date,
-        review_content: str
-    ) -> bool:
-        """Check if a review already exists based on date and content."""
-        for existing in existing_reviews:
-            if existing['fecha'] == review_date and existing['content'] == review_content:
-                return True
-        return False
 
 
 # Singleton instance
