@@ -77,7 +77,9 @@ class AppService:
             COALESCE(m.app_descargas, {self.DEFAULT_DOWNLOADS}) as downloads,
             COALESCE(m.app_icon_url, '{self.DEFAULT_ICON_URL}') as icon_url,
             COALESCE(m.app_categoria, '{self.DEFAULT_CATEGORY}') as category,
-            COALESCE(m.fecha_actualizacion, CURRENT_DATE()) as last_update
+            COALESCE(m.fecha_actualizacion, CURRENT_DATE()) as last_update,
+            m.app_rating as rating,
+            (SELECT COUNT(*) FROM `{self.historico_table}` h WHERE h.app_id = m.app_id) as total_ratings
         FROM `{self.maestro_table}` m
         {where_clause}
         ORDER BY downloads DESC, app_name ASC
@@ -96,20 +98,12 @@ class AppService:
                 logger.info(f"No apps found for search: '{app_name}'")
                 return []
 
-            # Extract app_ids for batch rating query
-            app_ids = [row.app_id for row in main_results]
-            
-            # Get ratings for all apps in a single batch query
-            ratings_data = await self._get_batch_app_ratings(app_ids)
-
             # Procesar resultados y crear objetos de respuesta
             apps = []
             for row in main_results:
-                # Get ratings for this app from batch results
-                app_rating_data = ratings_data.get(row.app_id, {
-                    'average_rating': None,
-                    'total_ratings': 0
-                })
+                # Use rating from scraper (stored in DIM_MAESTRO_REVIEWS)
+                rating = row.rating if hasattr(row, 'rating') and row.rating is not None else None
+                total_ratings = row.total_ratings if hasattr(row, 'total_ratings') and row.total_ratings is not None else 0
                 
                 # Procesar fecha de actualización
                 last_update = row.last_update
@@ -124,8 +118,8 @@ class AppService:
                     app_name=row.app_name,
                     store=row.store,
                     developer=row.developer,
-                    rating_average=app_rating_data.get('average_rating'),
-                    total_ratings=app_rating_data.get('total_ratings'),
+                    rating_average=rating,
+                    total_ratings=total_ratings,
                     downloads=row.downloads,
                     last_update=last_update,
                     icon_url=row.icon_url,
@@ -268,9 +262,11 @@ class AppService:
                     COALESCE(app_descargas, {self.DEFAULT_DOWNLOADS}) as downloads,
                     COALESCE(app_icon_url, '{self.DEFAULT_ICON_URL}') as icon_url,
                     COALESCE(app_categoria, '{self.DEFAULT_CATEGORY}') as category,
-                    COALESCE(fecha_actualizacion, CURRENT_DATE()) as last_update
-                FROM `{self.maestro_table}`
-                WHERE LOWER(app_id) = LOWER(@app_id)
+                    COALESCE(fecha_actualizacion, CURRENT_DATE()) as last_update,
+                    app_rating as rating,
+                    (SELECT COUNT(*) FROM `{self.historico_table}` h WHERE h.app_id = m.app_id) as total_ratings
+                FROM `{self.maestro_table}` m
+                WHERE LOWER(m.app_id) = LOWER(@app_id)
                 LIMIT 1
             """
             
@@ -289,8 +285,9 @@ class AppService:
             
             row = rows[0]
             
-            # Get ratings for this app
-            ratings = await self._get_app_ratings(app_id)
+            # Use rating from scraper (stored in DIM_MAESTRO_REVIEWS)
+            rating = row.rating if hasattr(row, 'rating') and row.rating is not None else None
+            total_ratings = row.total_ratings if hasattr(row, 'total_ratings') and row.total_ratings is not None else 0
             
             # Process last_update to ensure it's a date object
             last_update = row.last_update
@@ -309,8 +306,8 @@ class AppService:
                 'icon_url': row.icon_url,
                 'category': row.category,
                 'last_update': last_update,
-                'rating_average': ratings.get('average_rating'),  # Correct field name
-                'total_ratings': ratings.get('total_ratings')
+                'rating_average': rating,
+                'total_ratings': total_ratings
             }
             
             return AppDetailsResponse(**app_data)
@@ -380,6 +377,15 @@ class AppService:
         Returns:
             AppDetailsResponse if found, None otherwise
         """
+        # Normalize iOS app_id: remove "id" prefix if present (e.g., "id389801252" -> "389801252")
+        normalized_app_id = app_id
+        if store.lower() == 'ios' and app_id.startswith('id'):
+            normalized_app_id = app_id[2:]
+            logger.debug(f"Normalized iOS app_id from '{app_id}' to '{normalized_app_id}'")
+        
+        # Construct review_id to search by primary key
+        review_id = f"{normalized_app_id}_{store.lower()}_{country.lower()}"
+        
         query = f"""
         SELECT 
             app_id,
@@ -389,19 +395,17 @@ class AppService:
             COALESCE(app_descargas, {self.DEFAULT_DOWNLOADS}) as downloads,
             COALESCE(app_icon_url, '{self.DEFAULT_ICON_URL}') as icon_url,
             COALESCE(app_categoria, '{self.DEFAULT_CATEGORY}') as category,
-            COALESCE(fecha_actualizacion, CURRENT_DATE()) as last_update
-        FROM `{self.maestro_table}`
-        WHERE LOWER(app_id) = LOWER(@app_id)
-          AND LOWER(SO) = LOWER(@store)
-          AND LOWER(country_code) = LOWER(@country)
+            COALESCE(fecha_actualizacion, CURRENT_DATE()) as last_update,
+            app_rating as rating,
+            (SELECT COUNT(*) FROM `{self.historico_table}` h WHERE h.app_id = m.app_id) as total_ratings
+        FROM `{self.maestro_table}` m
+        WHERE review_id = @review_id
         LIMIT 1
         """
         
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("store", "STRING", store),
-                bigquery.ScalarQueryParameter("country", "STRING", country),
+                bigquery.ScalarQueryParameter("review_id", "STRING", review_id),
             ]
         )
         
@@ -414,8 +418,9 @@ class AppService:
             
             row = rows[0]
             
-            # Get ratings for this app
-            ratings = await self._get_app_ratings(app_id)
+            # Use rating from scraper (stored in DIM_MAESTRO_REVIEWS)
+            rating = row.rating if hasattr(row, 'rating') and row.rating is not None else None
+            total_ratings = row.total_ratings if hasattr(row, 'total_ratings') and row.total_ratings is not None else 0
             
             # Process last_update
             last_update = row.last_update
@@ -433,8 +438,8 @@ class AppService:
                 icon_url=row.icon_url,
                 category=row.category,
                 last_update=last_update,
-                rating_average=ratings.get('average_rating'),
-                total_ratings=ratings.get('total_ratings')
+                rating_average=rating,
+                total_ratings=total_ratings
             )
             
         except Exception as e:
