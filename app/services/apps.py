@@ -7,6 +7,8 @@ from datetime import datetime, date, timedelta
 import logging
 import httpx
 import os
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token
 
 logger = logging.getLogger(__name__)
 
@@ -471,8 +473,10 @@ class AppService:
         # Select appropriate scraper URL
         if store_lower == 'android':
             scraper_url = f"{self.ANDROID_SCRAPER_URL}/scrape"
+            base_url = self.ANDROID_SCRAPER_URL
         elif store_lower == 'ios':
             scraper_url = f"{self.IOS_SCRAPER_URL}/scrape"
+            base_url = self.IOS_SCRAPER_URL
         else:
             raise ValueError(f"Invalid store type: {store}. Must be 'android' or 'ios'")
         
@@ -480,10 +484,20 @@ class AppService:
             # Call Cloud Run scraper
             logger.info(f"Calling {store} scraper for app: {app_id}")
             
+            # Get ID token for Cloud Run authentication
+            auth_req = Request()
+            token = id_token.fetch_id_token(auth_req, base_url)
+            
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            
             async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     scraper_url,
-                    json={"app_id": app_id, "country": country}
+                    json={"app_id": app_id, "country": country},
+                    headers=headers
                 )
                 
                 if response.status_code == 404:
