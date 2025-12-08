@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from typing import Optional, Any
 from datetime import datetime, date
 
 
@@ -290,7 +290,7 @@ class AIAnalysisRequest(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "app_id": "com.example.app",
                 "analysis_type": "sentiment",
@@ -303,3 +303,89 @@ class AIAnalysisRequest(BaseModel):
                 },
             }
         }
+
+
+class AIAnalysisResponse(BaseModel):
+    """Response model for AI analysis request"""
+    batch: Any = Field(..., description="Batch information from OpenAI")
+    file_uploaded: Any = Field(..., description="File upload information from OpenAI")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "batch": {
+                    "id": "batch_123",
+                    "status": "processing"
+                },
+                "file_uploaded": {
+                    "id": "file_123",
+                    "filename": "reviews.jsonl"
+                }
+            }
+        }
+    )
+
+
+class SentimentSummary(BaseModel):
+    """Sentiment distribution summary"""
+    positive: int = Field(..., description="Percentage of positive reviews")
+    neutral: int = Field(..., description="Percentage of neutral reviews")
+    negative: int = Field(..., description="Percentage of negative reviews")
+    description: str = Field(..., description="Overall sentiment description")
+
+
+class TechnicalIssue(BaseModel):
+    """Technical issue reported in reviews"""
+    topic: str = Field(..., description="Issue topic or description")
+    percentage: int = Field(..., description="Percentage of mentions")
+
+
+class Recommendation(BaseModel):
+    """Recommendation for improvement"""
+    issue: str = Field(..., description="Identified issue")
+    solution: str = Field(..., description="Recommended solution")
+
+
+class Insight(BaseModel):
+    """Analysis insight or trend"""
+    trend: str = Field(..., description="Observed trend")
+    type: str = Field(..., description="Trend type: positive, negative, or neutral")
+
+
+class AggregatedAIAnalysisResponse(BaseModel):
+    """Response model for aggregated AI analysis results"""
+    sentimentSummary: SentimentSummary = Field(..., description="Sentiment distribution")
+    technicalIssues: list[TechnicalIssue] = Field(default_factory=list, description="Technical issues found")
+    strengths: list[str] = Field(default_factory=list, description="App strengths")
+    weaknesses: list[str] = Field(default_factory=list, description="App weaknesses")
+    recommendations: list[Recommendation] = Field(default_factory=list, description="Improvement recommendations")
+    insights: list[Insight] = Field(default_factory=list, description="Analysis insights")
+    volumeAnalyzed: int = Field(..., description="Number of reviews analyzed")
+    analyzedAt: Optional[str] = Field(None, description="Timestamp of analysis")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "sentimentSummary": {
+                    "positive": 60,
+                    "neutral": 25,
+                    "negative": 15,
+                    "description": "Mayoría de reseñas positivas (60%)"
+                },
+                "technicalIssues": [
+                    {"topic": "Problemas de rendimiento", "percentage": 35},
+                    {"topic": "Errores en login", "percentage": 25}
+                ],
+                "strengths": ["Interfaz intuitiva", "Funcionalidad completa"],
+                "weaknesses": ["Lentitud", "Bugs frecuentes"],
+                "recommendations": [
+                    {"issue": "Problemas de rendimiento", "solution": "Optimizar carga de datos"}
+                ],
+                "insights": [
+                    {"trend": "Usuarios satisfechos con diseño", "type": "positive"}
+                ],
+                "volumeAnalyzed": 150,
+                "analyzedAt": "2024-12-08T10:30:00Z"
+            }
+        }
+    )
