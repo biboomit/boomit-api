@@ -11,6 +11,7 @@ from app.schemas.reviews import (
     MetricsResponse,
     AIAnalysisRequest,
     AIAnalysisResponse,
+    AggregatedAIAnalysisResponse,
 )
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
@@ -320,7 +321,7 @@ async def request_ai_analysis(
         logger.error(f"Error in request_ai_analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@router.get("/ai-analysis")
+@router.get("/ai-analysis", response_model=AggregatedAIAnalysisResponse)
 async def get_ai_analysis(
     app_id: str = Query(..., description="App ID to get AI analysis for"),
     date_from: Optional[datetime] = Query(
