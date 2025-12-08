@@ -10,6 +10,7 @@ from app.schemas.reviews import (
     PaginatedReviewsResponse,
     MetricsResponse,
     AIAnalysisRequest,
+    AIAnalysisResponse,
 )
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
@@ -294,7 +295,7 @@ async def analyze_reviews_with_ai(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/ai-analysis", response_model=dict)
+@router.post("/ai-analysis", response_model=AIAnalysisResponse)
 async def request_ai_analysis(
     analysis_request: AIAnalysisRequest,
     service: ReviewService = Depends(get_review_service),
@@ -311,12 +312,15 @@ async def request_ai_analysis(
     """
     try:
         batch_object, file_uploaded = await service.request_ai_analysis(analysis_request.app_id, analysis_request.parameters)
-        return {"batch": batch_object, "file_uploaded": file_uploaded}
+        # Convert OpenAI objects to dicts for serialization
+        batch_dict = batch_object.model_dump() if hasattr(batch_object, 'model_dump') else dict(batch_object)
+        file_dict = file_uploaded.model_dump() if hasattr(file_uploaded, 'model_dump') else dict(file_uploaded)
+        return AIAnalysisResponse(batch=batch_dict, file_uploaded=file_dict)
     except Exception as e:
         logger.error(f"Error in request_ai_analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@router.get("/ai-analysis", response_model=dict)
+@router.get("/ai-analysis")
 async def get_ai_analysis(
     app_id: str = Query(..., description="App ID to get AI analysis for"),
     date_from: Optional[datetime] = Query(

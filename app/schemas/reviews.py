@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from typing import Optional, Any
 from datetime import datetime, date
 
 
@@ -290,7 +290,7 @@ class AIAnalysisRequest(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "app_id": "com.example.app",
                 "analysis_type": "sentiment",
@@ -303,3 +303,24 @@ class AIAnalysisRequest(BaseModel):
                 },
             }
         }
+
+
+class AIAnalysisResponse(BaseModel):
+    """Response model for AI analysis request"""
+    batch: Any = Field(..., description="Batch information from OpenAI")
+    file_uploaded: Any = Field(..., description="File upload information from OpenAI")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "batch": {
+                    "id": "batch_123",
+                    "status": "processing"
+                },
+                "file_uploaded": {
+                    "id": "file_123",
+                    "filename": "reviews.jsonl"
+                }
+            }
+        }
+    )
