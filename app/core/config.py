@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(default="your-openai-api-key")
     OPENAI_BATCH_SIZE: int = Field(default=1)
     OPENAI_MODEL: str = Field(default="gpt-4o-mini")
+    OPENAI_CHAT_MODEL: str = Field(default="gpt-4o-mini")  # Model for chat feature
 
     # File Upload Configuration
     MAX_FILE_SIZE: int = Field(default=10 * 1024 * 1024)  # 10MB
