@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class SentimentType(str, Enum):
@@ -56,28 +56,38 @@ class ConfidenceLevel(str, Enum):
 
 
 class SentimentSummary(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     overall: SentimentType
     score: int = Field(..., ge=1, le=5)
     description: str
 
 
 class TechnicalIssue(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     issue: str
     severity: SeverityLevel
     context: str
 
 
 class Strength(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     feature: str
     userImpact: str
 
 
 class Weakness(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     aspect: str
     userImpact: str
 
 
 class Recommendation(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     category: RecommendationCategory
     priority: PriorityLevel
     action: str
@@ -85,18 +95,24 @@ class Recommendation(BaseModel):
 
 
 class Insight(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     observation: str
     type: InsightType
     strategicValue: str
 
 
 class Metadata(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     reviewLength: ReviewLength
     analysisConfidence: ConfidenceLevel
     languageDetected: str
 
 
 class ReviewAnalysis(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    
     reviewDate: str
     sentimentSummary: SentimentSummary
     technicalIssues: List[TechnicalIssue]
