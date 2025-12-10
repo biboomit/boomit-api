@@ -36,21 +36,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-def _extract_user_info(current_user: dict) -> tuple[str, str]:
+def _extract_user_info(current_user: dict) -> str:
     """
-    Extract user_id and company_id from JWT payload.
+    Extract user_id from JWT payload.
     
     Args:
         current_user: JWT payload from get_current_user
     
     Returns:
-        Tuple of (user_id, company_id)
+        user_id
     
     Raises:
         HTTPException: If required fields are missing
     """
     user_id = current_user.get("sub") or current_user.get("user_id") or current_user.get("userId")
-    company_id = current_user.get("company_id") or current_user.get("companyId")
     
     if not user_id:
         raise HTTPException(
@@ -58,13 +57,7 @@ def _extract_user_info(current_user: dict) -> tuple[str, str]:
             detail="Token missing user identifier"
         )
     
-    if not company_id:
-        raise HTTPException(
-            status_code=403,
-            detail="User not associated with any company"
-        )
-    
-    return user_id, company_id
+    return user_id
 
 
 @router.post("/sessions", response_model=CreateSessionResponse)
@@ -76,35 +69,18 @@ async def create_chat_session(
     Create a new chat session for an app.
     
     This endpoint:
-    1. Validates app ownership (must belong to user's company)
+    1. Validates app ownership
     2. Loads analysis context (sentiment, themes, reviews)
     3. Creates a new session with 30-minute TTL
     
-    **Rate limits:** Max 5 active sessions per user
     """
-    user_id, company_id = _extract_user_info(current_user)
-    
-    logger.info(
-        f"Creating chat session for user {user_id}, company {company_id}, "
-        f"app {request.app_id}"
-    )
+    user_id = _extract_user_info(current_user)
+    logger.info(f"🟢 Creando sesión de chat para usuario {user_id}, app {request.app_id}")
     
     try:
-        # Validate app ownership
-        is_valid = await chat_context_builder.validate_app_ownership(
-            request.app_id,
-            company_id
-        )
-        
-        if not is_valid:
-            raise HTTPException(
-                status_code=404,
-                detail=f"App {request.app_id} not found or not owned by your company"
-            )
-        
         # Check session limit
         user_sessions = session_manager.get_user_sessions(user_id)
-        if len(user_sessions) >= 5:
+        if len(user_sessions) >= 1:
             raise HTTPException(
                 status_code=429,
                 detail="Maximum active sessions reached (5). Please close an existing session."
@@ -113,14 +89,12 @@ async def create_chat_session(
         # Build context
         context = await chat_context_builder.build_context(
             request.app_id,
-            company_id,
-            days_back=30
+            days_back=90
         )
         
         # Create session
         session = session_manager.create_session(
             user_id=user_id,
-            company_id=company_id,
             app_id=request.app_id,
             context=context
         )
@@ -167,22 +141,8 @@ async def send_message(
     
     data: {"token": "", "done": true}
     ```
-    
-    **Client example (JavaScript):**
-    ```javascript
-    const eventSource = new EventSource('/api/v1/chat/sessions/xxx/messages');
-    
-    eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.done) {
-            eventSource.close();
-        } else {
-            console.log(data.token);
-        }
-    };
-    ```
     """
-    user_id, company_id = _extract_user_info(current_user)
+    user_id = _extract_user_info(current_user)
     
     logger.info(
         f"User {user_id} sending message to session {session_id}: "
@@ -282,7 +242,7 @@ async def get_conversation_history(
     
     Returns all messages in chronological order.
     """
-    user_id, company_id = _extract_user_info(current_user)
+    user_id = _extract_user_info(current_user)
     
     logger.info(f"User {user_id} retrieving history for session {session_id}")
     
@@ -325,7 +285,7 @@ async def get_session_stats(
     - Session age
     - Context summary
     """
-    user_id, company_id = _extract_user_info(current_user)
+    user_id = _extract_user_info(current_user)
     
     try:
         session = session_manager.get_session(session_id, user_id)
@@ -364,7 +324,7 @@ async def list_user_sessions(
     
     Returns sessions sorted by last activity (most recent first).
     """
-    user_id, company_id = _extract_user_info(current_user)
+    user_id = _extract_user_info(current_user)
     
     try:
         sessions = session_manager.get_user_sessions(user_id)

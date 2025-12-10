@@ -111,7 +111,6 @@ class ChatSession(BaseModel):
     
     session_id: str
     user_id: str
-    company_id: str
     app_id: str
     context: Dict[str, Any]  # Loaded analysis context
     messages: List[ChatMessage] = Field(default_factory=list)

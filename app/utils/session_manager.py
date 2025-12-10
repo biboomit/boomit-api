@@ -57,7 +57,6 @@ class SessionManager:
     def create_session(
         self,
         user_id: str,
-        company_id: str,
         app_id: str,
         context: Dict
     ) -> ChatSession:
@@ -66,7 +65,6 @@ class SessionManager:
         
         Args:
             user_id: User identifier
-            company_id: Company identifier (for data isolation)
             app_id: App identifier
             context: Pre-loaded analysis context
         
@@ -78,7 +76,6 @@ class SessionManager:
         session = ChatSession(
             session_id=session_id,
             user_id=user_id,
-            company_id=company_id,
             app_id=app_id,
             context=context,
             messages=[],
@@ -89,8 +86,8 @@ class SessionManager:
         self.sessions[session_id] = session
         
         logger.info(
-            f"Created session {session_id} for user {user_id}, "
-            f"company {company_id}, app {app_id}"
+            f"Created session {session_id} for user {user_id} "
+            f"and app {app_id}"
         )
         
         # Cleanup old sessions

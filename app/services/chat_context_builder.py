@@ -2,7 +2,6 @@
 Chat context builder service.
 
 Loads relevant analysis data from BigQuery to provide context for AI chat responses.
-Filters data by company_id for data isolation.
 """
 
 import logging
@@ -27,36 +26,30 @@ class ChatContextBuilder:
     """
     
     def __init__(self):
-        """Initialize BigQuery client"""
-        self.client = bigquery.Client(project=settings.PROJECT_ID)
-        self.project_id = settings.PROJECT_ID
-        
-        # Table IDs
-        self.reviews_table = f"{self.project_id}.DWH_BoomitMarketing.DIM_REVIEWS_HISTORICO"
-        self.analysis_table = f"{self.project_id}.AIOutput.Reviews_Analysis"
-        self.themes_table = f"{self.project_id}.AIOutput.EMERGING_THEMES"
-        
+        """Initialize BigQuery client using config standard."""
+        from app.core.config import bigquery_config
+        self.client = bigquery_config.get_client()
+        self.reviews_table = bigquery_config.get_table_id("DIM_REVIEWS_HISTORICO")
+        self.analysis_table = bigquery_config.get_table_id_with_dataset("AIOutput", "Reviews_Analysis")
+        self.themes_table = bigquery_config.get_table_id_with_dataset("AIOutput", "EMERGING_THEMES")
         logger.info("ChatContextBuilder initialized")
     
     async def build_context(
         self,
         app_id: str,
-        company_id: str,
-        days_back: int = 30
+        days_back: int = 90
     ) -> Dict[str, Any]:
         """
         Build chat context by loading analysis data for an app.
         
         Args:
             app_id: App identifier
-            company_id: Company identifier (for data isolation)
-            days_back: Number of days to look back for data (default: 30)
+            days_back: Number of days to look back for data (default: 90)
         
         Returns:
             Dictionary with context data:
             {
                 "app_id": "com.lulubit",
-                "company_id": "company_123",
                 "sentiment_summary": {...},
                 "emerging_themes": [...],
                 "sample_reviews": {"positive": [...], "negative": [...]},
@@ -67,20 +60,18 @@ class ChatContextBuilder:
             DatabaseConnectionError: If query fails
         """
         logger.info(
-            f"Building context for app {app_id}, company {company_id}, "
-            f"last {days_back} days"
+            f"Building context for app {app_id}, last {days_back} days"
         )
         
         try:
             # Load data in parallel (conceptually - BigQuery executes sequentially)
-            sentiment_summary = await self._get_sentiment_summary(app_id, company_id, days_back)
-            emerging_themes = await self._get_emerging_themes(app_id, company_id)
-            sample_reviews = await self._get_sample_reviews(app_id, company_id, days_back)
-            stats = await self._get_app_stats(app_id, company_id, days_back)
-            
+            sentiment_summary = await self._get_sentiment_summary(app_id, days_back)
+            emerging_themes = await self._get_emerging_themes(app_id)
+            sample_reviews = await self._get_sample_reviews(app_id, days_back)
+            stats = await self._get_app_stats(app_id, days_back)
+
             context = {
                 "app_id": app_id,
-                "company_id": company_id,
                 "sentiment_summary": sentiment_summary,
                 "emerging_themes": emerging_themes,
                 "sample_reviews": sample_reviews,
@@ -99,13 +90,12 @@ class ChatContextBuilder:
             logger.error(f"Error building context: {e}")
             raise DatabaseConnectionError(
                 f"Failed to build chat context for app {app_id}",
-                details={"app_id": app_id, "company_id": company_id, "error": str(e)}
+                details={"app_id": app_id, "error": str(e)}
             )
     
     async def _get_sentiment_summary(
         self,
         app_id: str,
-        company_id: str,
         days_back: int
     ) -> Optional[Dict[str, Any]]:
         """
@@ -121,7 +111,6 @@ class ChatContextBuilder:
                 ROW_NUMBER() OVER (ORDER BY analyzed_at DESC) as rn
             FROM `{self.analysis_table}`
             WHERE app_id = @app_id
-              AND company_id = @company_id
               AND review_date >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
               AND JSON_EXTRACT_SCALAR(json_data, '$.sentiment_summary') IS NOT NULL
         )
@@ -129,11 +118,10 @@ class ChatContextBuilder:
         FROM latest_analysis
         WHERE rn = 1
         """
-        
+
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("company_id", "STRING", company_id),
                 bigquery.ScalarQueryParameter("days_back", "INT64", days_back)
             ]
         )
@@ -155,8 +143,7 @@ class ChatContextBuilder:
     
     async def _get_emerging_themes(
         self,
-        app_id: str,
-        company_id: str
+        app_id: str
     ) -> List[Dict[str, Any]]:
         """
         Get latest emerging themes from EMERGING_THEMES table.
@@ -167,15 +154,13 @@ class ChatContextBuilder:
         SELECT json_data
         FROM `{self.themes_table}`
         WHERE app_id = @app_id
-          AND company_id = @company_id
         ORDER BY analyzed_at DESC
         LIMIT 1
         """
-        
+
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("company_id", "STRING", company_id)
+                bigquery.ScalarQueryParameter("app_id", "STRING", app_id)
             ]
         )
         
@@ -197,7 +182,6 @@ class ChatContextBuilder:
     async def _get_sample_reviews(
         self,
         app_id: str,
-        company_id: str,
         days_back: int,
         limit: int = 5
     ) -> Dict[str, List[Dict[str, Any]]]:
@@ -212,40 +196,37 @@ class ChatContextBuilder:
         """
         # Positive reviews (4-5 stars)
         positive_query = f"""
-        SELECT
-            review_texto as text,
-            review_rating as rating,
-            review_fecha as date
-        FROM `{self.reviews_table}`
-        WHERE app_id = @app_id
-          AND company_id = @company_id
-          AND review_rating >= 4
-          AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
-          AND LENGTH(review_texto) > 50
-        ORDER BY review_fecha DESC
-        LIMIT @limit
+            SELECT
+                review_texto as text,
+                review_rating as rating,
+                review_fecha as date
+            FROM `{self.reviews_table}`
+            WHERE app_id = @app_id
+                AND review_rating >= 4
+                AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+                AND LENGTH(review_texto) > 50
+            ORDER BY review_fecha DESC
+            LIMIT @limit
         """
-        
+
         # Negative reviews (1-2 stars)
         negative_query = f"""
-        SELECT
-            review_texto as text,
-            review_rating as rating,
-            review_fecha as date
-        FROM `{self.reviews_table}`
-        WHERE app_id = @app_id
-          AND company_id = @company_id
-          AND review_rating <= 2
-          AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
-          AND LENGTH(review_texto) > 50
-        ORDER BY review_fecha DESC
-        LIMIT @limit
+            SELECT
+                review_texto as text,
+                review_rating as rating,
+                review_fecha as date
+            FROM `{self.reviews_table}`
+            WHERE app_id = @app_id
+                AND review_rating <= 2
+                AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+                AND LENGTH(review_texto) > 50
+            ORDER BY review_fecha DESC
+            LIMIT @limit
         """
-        
+
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("company_id", "STRING", company_id),
                 bigquery.ScalarQueryParameter("days_back", "INT64", days_back),
                 bigquery.ScalarQueryParameter("limit", "INT64", limit)
             ]
@@ -286,7 +267,6 @@ class ChatContextBuilder:
     async def _get_app_stats(
         self,
         app_id: str,
-        company_id: str,
         days_back: int
     ) -> Dict[str, Any]:
         """
@@ -296,7 +276,7 @@ class ChatContextBuilder:
             {
                 "total_reviews": 1000,
                 "avg_rating": 4.2,
-                "period_days": 30
+                "period_days": 90
             }
         """
         query = f"""
@@ -305,14 +285,12 @@ class ChatContextBuilder:
             AVG(review_rating) as avg_rating
         FROM `{self.reviews_table}`
         WHERE app_id = @app_id
-          AND company_id = @company_id
           AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
         """
-        
+
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("company_id", "STRING", company_id),
                 bigquery.ScalarQueryParameter("days_back", "INT64", days_back)
             ]
         )
@@ -334,43 +312,7 @@ class ChatContextBuilder:
             logger.warning(f"Error fetching app stats: {e}")
             return {"total_reviews": 0, "avg_rating": 0.0, "period_days": days_back}
     
-    async def validate_app_ownership(
-        self,
-        app_id: str,
-        company_id: str
-    ) -> bool:
-        """
-        Validate that app belongs to company.
-        
-        Args:
-            app_id: App identifier
-            company_id: Company identifier
-        
-        Returns:
-            True if app belongs to company, False otherwise
-        """
-        query = """
-        SELECT COUNT(*) as count
-        FROM `DWH_BoomitMarketing.DIM_MAESTRO_REVIEWS`
-        WHERE app_id = @app_id
-          AND company_id = @company_id
-        """
-        
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("app_id", "STRING", app_id),
-                bigquery.ScalarQueryParameter("company_id", "STRING", company_id)
-            ]
-        )
-        
-        try:
-            results = self.client.query(query, job_config=job_config).result()
-            row = next(results)
-            return row.count > 0
-            
-        except Exception as e:
-            logger.error(f"Error validating app ownership: {e}")
-            return False
+    # validate_app_ownership removido temporalmente
 
 
 # Global context builder instance
