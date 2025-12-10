@@ -65,6 +65,7 @@ class OpenAIBatchIntegration:
                     "metadata": {
                         "review_date": date.isoformat(),
                     },
+                    "store": True
                 }
 
                 # Create the batch request line
