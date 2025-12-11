@@ -45,3 +45,27 @@ class AuthError(BoomitAPIException):
         super().__init__(
             message, status_code=status_code, error_code="AUTH_ERROR", details=details
         )
+
+
+class ChatSessionNotFoundError(BoomitAPIException):
+    def __init__(
+        self,
+        message: str = "Chat session not found",
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        logger.warning(f"ChatSessionNotFoundError: {message}, Details: {details}")
+        super().__init__(
+            message, status_code=404, error_code="SESSION_NOT_FOUND", details=details
+        )
+
+
+class ChatSessionExpiredError(BoomitAPIException):
+    def __init__(
+        self,
+        message: str = "Chat session expired",
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        logger.warning(f"ChatSessionExpiredError: {message}, Details: {details}")
+        super().__init__(
+            message, status_code=410, error_code="SESSION_EXPIRED", details=details
+        )
