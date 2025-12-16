@@ -296,7 +296,7 @@ async def analyze_reviews_with_ai(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/ai-analysis", response_model=AIAnalysisResponse)
+@router.post("/ai-analysis", response_model=dict)
 async def request_ai_analysis(
     analysis_request: AIAnalysisRequest,
     service: ReviewService = Depends(get_review_service),
@@ -304,19 +304,20 @@ async def request_ai_analysis(
 ):
     """
     Request AI analysis for reviews based on the provided parameters.
-    Default behavior is to analyze the reviews of the latest 30 days.
+    Now triggers concurrent OpenAI analysis and bulk insert to BigQuery.
 
     Args:
-        analysis_request (AIAnalysisRequest): Parameters for the AI analysis request. App ID is required.
+        analysis_request (AIAnalysisRequest): Parameters for the AI analysis request. App ID and source are required.
         service (ReviewService): Review service dependency. Defaults to Depends(get_review_service).
         current_user (dict): Authenticated user dependency. Defaults to Depends(get_current_user).
     """
     try:
-        batch_object, file_uploaded = await service.request_ai_analysis(analysis_request.app_id, analysis_request.parameters)
-        # Convert OpenAI objects to dicts for serialization
-        batch_dict = batch_object.model_dump() if hasattr(batch_object, 'model_dump') else dict(batch_object)
-        file_dict = file_uploaded.model_dump() if hasattr(file_uploaded, 'model_dump') else dict(file_uploaded)
-        return AIAnalysisResponse(batch=batch_dict, file_uploaded=file_dict)
+        result = await service.request_ai_analysis(
+            analysis_request.app_id,
+            analysis_request.source,
+            analysis_request.parameters
+        )
+        return {"status": result}
     except Exception as e:
         logger.error(f"Error in request_ai_analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
