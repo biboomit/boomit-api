@@ -1,99 +1,146 @@
-import io
+
+import asyncio
 import json
-from app.core.config import OpenAIConfig
-from openai import OpenAI
+from datetime import datetime
+from app.core.config import OpenAIConfig, bigquery_config
 from app.integrations.openai.review_model_response import ReviewAnalysis
-from datetime import datetime, date
+import httpx
+import pandas as pd
+import random
+import string
+from google.cloud import bigquery
+from datetime import datetime
+import os
+import logging
 
+logger = logging.getLogger(__name__)
 
-class OpenAIBatchIntegration:
-    """Integration class for handling batch operations with OpenAI."""
+class OpenAIConcurrentIntegration:
+    """Procesa reviews de BigQuery una a una usando OpenAI concurrentemente y guarda resultados en archivo."""
 
     def __init__(self):
         self.api_key = OpenAIConfig().get_api_key()
-
-    def process_using_batches(self, data):
-        """Process a batch of data using OpenAI API."""
-
-        batches = self._create_batches(data)
-
-        jsonl_file = self._create_upload_file(batches)
-
-        uploaded, batch = self._upload_and_create_batch(jsonl_file)
-
-        return uploaded, batch
-
-    def _create_batches(
-        self, data: list[tuple[str, int, datetime]]
-    ) -> list[list[tuple[str, int, datetime]]]:
-        """Create batches from the input data."""
-        data_batches = []
-        batch_size = OpenAIConfig().get_batch_size()
-
-        for i in range(0, len(data), batch_size):
-            data_batches.append(data[i : i + batch_size])
-
-        return data_batches
-
-    def _create_upload_file(
-        self, batches: list[list[tuple[str, int, datetime]]]
-    ) -> str:
-        """Create a JSONL file from the batches."""
-        lines = []
-
-        # Flatten all batches and create JSONL lines
-        for batch_idx, batch in enumerate(batches):
-            for item_idx, (content, score, date) in enumerate(batch):
-                # Create the request body following OpenAI batch format
-                body = {
-                    "model": OpenAIConfig().get_model(),
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": OpenAIConfig().batch_system_prompt(),
-                        },
-                        {"role": "user", "content": f"{score}: {content}"},
-                    ],
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "ReviewAnalysis",
-                            "strict": True,
-                            "schema": ReviewAnalysis.model_json_schema()
-                        }
-                    },
-                    "metadata": {
-                        "review_date": date.isoformat(),
-                    },
-                    "store": True
-                }
-
-                # Create the batch request line
-                request_line = {
-                    "custom_id": f"batch-review-{batch_idx}-item-{item_idx}",
-                    "method": "POST",
-                    "url": "/v1/chat/completions",
-                    "body": body,
-                }
-
-                lines.append(request_line)
-
-        # Convert lines to JSONL format and return
-        return "\n".join(json.dumps(line) for line in lines)
-
-    def _upload_and_create_batch(self, jsonl_file: str):
-        client = OpenAI(api_key=self.api_key)
-
-        uploaded_file = client.files.create(
-            file=io.BytesIO(jsonl_file.encode("utf-8")),
-            purpose="batch",
+        self.model = OpenAIConfig().get_model()
+        self.system_prompt = OpenAIConfig().batch_system_prompt()
+        self.max_concurrent = int(os.getenv("OPENAI_MAX_CONCURRENT", 20))
+        self.client = bigquery_config.get_client()
+        self.review_his_table = bigquery_config.get_table_id("DIM_REVIEWS_HISTORICO")
+        self.analysis_table_id = bigquery_config.get_table_id_with_dataset(
+            "AIOutput", "Reviews_Analysis"
         )
 
-        batch = client.batches.create(
-            input_file_id=uploaded_file.id,
-            endpoint="/v1/chat/completions",
-            completion_window="24h",
-            metadata={"job": "review_analysis_v1"},
-        )
+    async def fetch_reviews(self, app_id: str, source: str = None):
+        # Usa el cliente real de BigQuery si está disponible
+        client = self.client
+        query = f'''
+            SELECT content, score, fecha
+            FROM `{self.review_his_table}`
+            WHERE app_id = @app_id
+        '''
+        query_parameters = [bigquery.ScalarQueryParameter("app_id", "STRING", app_id)]
+        if source:
+            query += " AND LOWER(source) = @source"
+            query_parameters.append(bigquery.ScalarQueryParameter("source", "STRING", source.lower()))
+        query += " ORDER BY fecha DESC"
+        job_config = None
+        try:
+            job_config = bigquery.QueryJobConfig(query_parameters=query_parameters)
+        except ImportError:
+            pass
+        results = client.query(query, job_config=job_config).result()
+        # logger.info(f"📝 Fetched {len(list(results))} reviews for app_id: {app_id} and source: {source}")
+        return [(row.content, row.score, row.fecha) for row in results]
 
-        return uploaded_file, batch
+    async def analyze_review(self, review, client):
+        content, score, fecha = review
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": f"{score}: {content}"}
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "ReviewAnalysis",
+                    "strict": True,
+                    "schema": ReviewAnalysis.model_json_schema()
+                }
+            }
+        }
+        try:
+            resp = await client.post(url, headers=headers, json=body, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "review_texto": content,
+                "review_rating": score,
+                "review_fecha": str(fecha),
+                "openai_response": data
+            }
+        except Exception as e:
+            return {
+                "review_texto": content,
+                "review_rating": score,
+                "review_fecha": str(fecha),
+                "error": str(e)
+            }
+
+    async def process_reviews_concurrently(self, app_id: str, source: str = None):
+        """Procesa reviews concurrentemente y guarda resultados en BigQuery."""
+
+        reviews = await self.fetch_reviews(app_id, source)
+        results = []
+        sem = asyncio.Semaphore(self.max_concurrent)
+        analyzed_at = datetime.utcnow()
+
+        async with httpx.AsyncClient() as client:
+            async def sem_task(review):
+                async with sem:
+                    return await self.analyze_review(review, client)
+            tasks = [sem_task(review) for review in reviews]
+            for coro in asyncio.as_completed(tasks):
+                result = await coro
+                results.append(result)
+
+        # Construir DataFrame para bulk insert
+        def generar_codigo():
+            numbers = "".join(random.choices(string.digits, k=6))
+            return f"ra{numbers}"
+
+        rows = []
+        for r in results:
+            # Si hubo error, no insertamos
+            if "error" in r:
+                continue
+            rows.append({
+                "analysis_id": generar_codigo(),
+                "app_id": app_id,
+                "json_data": json.dumps(r["openai_response"], ensure_ascii=False),
+                "analyzed_at": analyzed_at,
+                "review_date": r["review_fecha"]
+            })
+
+        if not rows:
+            return []
+
+        df = pd.DataFrame(rows)
+
+        # Convertir tipos
+        df["analyzed_at"] = pd.to_datetime(df["analyzed_at"])
+        df["review_date"] = pd.to_datetime(df["review_date"]).dt.date
+
+        # Insertar en BigQuery
+        bq_client = bigquery.Client()
+        job_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_APPEND",
+        )
+        job = bq_client.load_table_from_dataframe(df, self.analysis_table_id, job_config=job_config)
+        job.result()
+
+        return rows
