@@ -9,7 +9,7 @@ from app.schemas.reviews import (
     AIAnalysisRequest,
     AnalysisParameters,
 )
-from app.integrations.openai.batch import OpenAIBatchIntegration
+from app.integrations.openai.batch import OpenAIConcurrentIntegration
 from app.core.config import bigquery_config
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -524,37 +524,24 @@ class ReviewService:
     async def request_ai_analysis(
         self,
         app_id: str,
+        source: str = None,
         analysis_params: Optional[AnalysisParameters] = None,
     ):
         """
-        Request AI analysis for reviews of a specific app.
-        Calls an external AI (OpenAI) service to perform the analysis using batch processing.
+        Request AI analysis for reviews of a specific app and source.
+        Calls an external AI (OpenAI) service to perform the analysis using concurrent processing.
 
         Args:
             app_id (str): The ID of the app to analyze.
+            source (str): The source of the reviews (android or ios).
             analysis_params (Optional[AIAnalysisRequest]): The parameters for the analysis.
         """
-        # 1. Obtain reviews for the app
-        reviews = await self._get_reviews_for_analysis(app_id, analysis_params)
-
-        logger.info(f"Fetched {len(reviews)} reviews for analysis of app_id: {app_id}")
-        logger.info(f"Sample review: {reviews[0].comment if reviews else 'No reviews found'}")
-
-        # 2. Call integration with AI service (OpenAI) to analyze reviews
-        openai_integration = OpenAIBatchIntegration()
-
-        reviews_data = [
-            (review.comment, review.rating, review.date) for review in reviews
-        ]
-
-        file_uploaded, batch_object = openai_integration.process_using_batches(
-            reviews_data
-        )
-
+        openai_integration = OpenAIConcurrentIntegration()
+        await openai_integration.process_reviews_concurrently(app_id=app_id, source=source)
         logger.info(
-            f"Requested AI analysis for app_id: {app_id}, batch_id: {batch_object.id}"
+            f"Requested AI analysis for app_id: {app_id}, source: {source} using concurrent OpenAI integration"
         )
-        return batch_object, file_uploaded
+        return "bigquery_bulk_insert_done"
 
     async def _get_reviews_for_analysis(
         self,
@@ -712,13 +699,36 @@ class ReviewService:
                     "analyzedAt": None
                 }
             
-            # Parse all JSON data
+            # Parse all JSON data, extracting the nested OpenAI response if present
             analyses = []
             for row in rows:
                 json_data = row["json_data"]
+                # Si es string, parsear a dict
                 if isinstance(json_data, str):
-                    analyses.append(json.loads(json_data))
+                    try:
+                        json_data = json.loads(json_data)
+                    except Exception:
+                        pass
+                # Si es respuesta OpenAI (choices[0].message.content), extraer y parsear el JSON anidado
+                if (
+                    isinstance(json_data, dict)
+                    and "choices" in json_data
+                    and isinstance(json_data["choices"], list)
+                    and len(json_data["choices"]) > 0
+                    and "message" in json_data["choices"][0]
+                    and "content" in json_data["choices"][0]["message"]
+                ):
+                    content = json_data["choices"][0]["message"]["content"]
+                    # El contenido puede ser un string JSON, intentar parsear
+                    try:
+                        content_json = json.loads(content)
+                        analyses.append(content_json)
+                    except Exception:
+                        # Si no es JSON válido, omitir o loggear
+                        logger.warning(f"No se pudo parsear el contenido JSON anidado en análisis para app_id {app_id}")
+                        continue
                 else:
+                    # Si ya es el formato esperado, agregar directo
                     analyses.append(json_data)
             
             # Aggregate data using only actual content from analyses

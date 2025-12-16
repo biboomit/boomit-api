@@ -283,7 +283,9 @@ class AnalysisParameters(BaseModel):
 class AIAnalysisRequest(BaseModel):
     """Request model for AI analysis of reviews"""
 
+
     app_id: str = Field(..., description="App ID associated with the reviews")
+    source: str = Field(..., description="Source of the reviews (android or ios)")
     analysis_type: str = Field(..., description="Type of AI analysis to perform")
     parameters: Optional[AnalysisParameters] = Field(
         None, description="Additional parameters for the AI analysis"
@@ -293,6 +295,7 @@ class AIAnalysisRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "app_id": "com.example.app",
+                "source": "android",
                 "analysis_type": "sentiment",
                 "parameters": {
                     "from_date": "2024-01-01",
