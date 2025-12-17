@@ -194,6 +194,88 @@ async def analyze_emerging_themes(
             detail="An unexpected error occurred. Please contact support.",
         )
 
+@router.post(
+    "/emerging-themes/global",
+    summary="Request synchronous global AI analysis of emerging themes from app reviews",
+    description="""
+    Analiza reviews de los últimos 90 días para identificar temas emergentes y patrones usando un solo prompt global.
+    El análisis es síncrono.
+    """,
+    status_code=status.HTTP_200_OK,
+)
+async def analyze_emerging_themes_global(
+    request: EmergingThemesAnalysisRequest,
+    service: EmergingThemesService = Depends(get_emerging_themes_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Inicia el análisis global de temas emergentes para una app y devuelve el resultado directo (prompt único, síncrono).
+    """
+    try:
+        logger.info(
+            f"User {current_user.get('sub', 'unknown')} requested synchronous emerging themes "
+            f"analysis for app: {request.app_id} (force_new: {request.force_new_analysis})"
+        )
+        result = await service.analyze_emerging_themes_global(
+            request.app_id,
+            force_new_analysis=request.force_new_analysis
+        )
+         # Check if response is from cache
+        if result.get("from_cache"):
+            # Cached response
+            response = EmergingThemesAnalysisResponse(
+                batch_id="",  
+                status="completed",  # Cached results are already completed
+                app_id=result["app_id"],
+                total_reviews_analyzed=result["total_reviews"],
+                analysis_period_start=result["start_date"],
+                analysis_period_end=result["end_date"],
+                created_at=result["created_at"],
+                from_cache=True,
+                cache_age_hours=result["cache_age_hours"],
+                message=(
+                    f"Análisis encontrado en caché (edad: {result['cache_age_hours']:.1f} horas). "
+                    f"App ID: '{result['app_id']}'. "
+                    f"Use GET /emerging-themes/{request.app_id}/latest para ver los resultados. "
+                    f"Para forzar un nuevo análisis, use force_new_analysis=true."
+                ),
+            )
+            logger.info(
+                f"Returned cached analysis for {request.app_id}. "
+            )
+            return response
+        else:
+            return result
+    except ValueError as e:
+        error_message = str(e)
+        logger.warning(f"Validation error for app {request.app_id}: {error_message}")
+        if "not found" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="App not found"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_message
+            )
+    except DatabaseConnectionError as e:
+        logger.error(
+            f"Database error while analyzing app {request.app_id}: {str(e)}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to connect to database. Please try again later."
+        )
+    except Exception as e:
+        logger.error(
+            f"Unexpected error analyzing emerging themes for app {request.app_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please contact support."
+        )
 
 @router.get(
     "/emerging-themes/{app_id}/latest",
@@ -301,4 +383,3 @@ async def get_latest_emerging_themes(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve analysis. Please try again later.",
         )
-
