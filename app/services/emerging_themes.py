@@ -3,12 +3,18 @@ from datetime import datetime, timedelta
 from google.cloud import bigquery
 import logging
 import json
+import httpx
+import os
+import pandas as pd
+import random
+import string
 
 from app.core.config import bigquery_config
 from app.core.exceptions import DatabaseConnectionError
 from app.integrations.openai.emerging_themes_batch import (
     OpenAIEmergingThemesBatchIntegration,
 )
+from app.integrations.openai.emerging_themes_prompt import EMERGING_THEMES_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +129,166 @@ class EmergingThemesService:
 
             return batch, metadata
 
+        except ValueError as e:
+            logger.error(f"Validation error: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Error analyzing emerging themes: {str(e)}")
+            raise DatabaseConnectionError(
+                f"Failed to analyze emerging themes for app {app_id}: {str(e)}"
+            )
+
+    async def analyze_emerging_themes_global(
+        self, app_id: str, force_new_analysis: bool = False
+    ) -> dict:
+        """
+        Analiza temas emergentes de manera global usando un solo prompt y request síncrona a OpenAI.
+        """
+        try:
+            # Calcular rango de fechas (últimos 90 días)
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(days=90)
+
+            # Generate cache key
+            cache_key = self._generate_cache_key(app_id, start_date, end_date)
+
+            # Check for cached analysis (unless forced)
+            if not force_new_analysis:
+                cached_analysis = await self._find_cached_analysis(cache_key)
+                
+                if cached_analysis:
+                    logger.info(
+                        f"Returning cached analysis for {app_id}. "
+                        f"Age: {cached_analysis['cache_age_hours']:.1f} hours"
+                    )
+                    
+                    # Return cached batch info with updated metadata
+                    cached_analysis["from_cache"] = True
+
+                    return cached_analysis  # None for batch since it's cached
+
+            # Get app metadata (name and category)
+            app_metadata = await self._get_app_metadata(app_id)
+
+            if not app_metadata:
+                raise ValueError(f"App with ID '{app_id}' not found")
+
+            # Fetch reviews from last 90 days
+            reviews = await self._get_reviews_last_90_days(app_id, start_date, end_date)
+
+            if not reviews:
+                raise ValueError(f"No reviews found for app '{app_id}' in the last 90 days")
+            if len(reviews) < 20:
+                raise ValueError( f"Not enough reviews ({len(reviews)}) for app '{app_id}' to perform analysis. Minimum 20 required.")
+
+            logger.info(
+                f"Found {len(reviews)} reviews for app {app_id} "
+                f"from {start_date.date()} to {end_date.date()}"
+            )
+
+            # Build global prompt
+            system_prompt = EMERGING_THEMES_PROMPT.format(
+                app_id=app_id,
+                app_name=app_metadata["app_name"],
+                app_category=app_metadata["app_category"],
+                total_reviews=len(reviews),
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d"),
+            )
+            # Build user content
+            formatted_reviews = []
+
+            for idx, (content, score, review_date) in enumerate(reviews, 1):
+                date_str = review_date.strftime("%Y-%m-%d")
+                formatted_review = f"Review {idx} | {date_str} | Score: {score}/5\n{content}\n"
+                formatted_reviews.append(formatted_review)
+
+            # Join all reviews with separator
+            all_reviews = "\n" + "="*80 + "\n\n".join(formatted_reviews)
+            user_content = f"""A continuación se presentan {len(reviews)} reviews de usuarios para analizar: \n\n{all_reviews}\n\nAnaliza estas reviews e identifica los temas emergentes según las instrucciones proporcionadas en el prompt del sistema."""
+
+            # Prepare request to OpenAI
+            api_key = os.getenv("OPENAI_API_KEY")
+            model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            body = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.7,
+                "max_tokens": 4000
+            }
+
+            # OpenAI request
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(url, headers=headers, json=body)
+                resp.raise_for_status()
+                data = resp.json()
+
+            # Extract emerging themes from response
+            if (
+                isinstance(data, dict)
+                and "choices" in data
+                and isinstance(data["choices"], list)
+                and len(data["choices"]) > 0
+                and "message" in data["choices"][0]
+                and "content" in data["choices"][0]["message"]
+            ):
+                content = data["choices"][0]["message"]["content"]
+                try:
+                    themes_json = json.loads(content)
+                except Exception:
+                    themes_json = {"themes": []}
+            else:
+                themes_json = {"themes": []}
+
+            # Save in BigQuery (EMERGING_THEMES)
+            analyzed_at = datetime.utcnow()
+            created_at = analyzed_at
+
+            def generar_codigo():
+                numbers = "".join(random.choices(string.digits, k=6))
+                return f"et{numbers}"
+            
+            analysis_id = generar_codigo()
+            cache_key = f"{app_id}_{start_date.date()}_{end_date.date()}"
+            df = pd.DataFrame([{
+                "analysis_id": analysis_id,
+                "app_id": app_id,
+                "batch_id": None,
+                "json_data": json.dumps(themes_json, ensure_ascii=False),
+                "analysis_period_start": start_date.date(),
+                "analysis_period_end": end_date.date(),
+                "total_reviews_analyzed": len(reviews),
+                "analyzed_at": analyzed_at,
+                "created_at": created_at,
+                "cache_key": cache_key
+            }])
+            bq_client = self.client
+            table_id = self.emerging_themes_table
+            job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+            job = bq_client.load_table_from_dataframe(df, table_id, job_config=job_config)
+            job.result()
+
+            # Build response dict
+            result = {
+                "app_id": app_id,
+                "app_name": app_metadata["app_name"],
+                "app_category": app_metadata["app_category"],
+                "total_reviews_analyzed": len(reviews),
+                "analysis_period_start": start_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "analysis_period_end": end_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "themes": f"Go to /emerging-themes/{app_id}/latest to fetch the themes",
+                "analyzed_at": analyzed_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            }
+            return result
         except ValueError as e:
             logger.error(f"Validation error: {str(e)}")
             raise
@@ -357,9 +523,7 @@ class EmergingThemesService:
         try:
             query_job = self.client.query(query, job_config=job_config)
             results = list(query_job.result())
-            # TODO: log the cache key for debugging
             logger.debug(f"Cache key used: {cache_key}")
-             # TODO: log the result for debugging
             logger.debug(f"Cache query results: {results}")
 
             if not results:
