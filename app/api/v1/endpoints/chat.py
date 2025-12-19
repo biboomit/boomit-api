@@ -89,7 +89,7 @@ async def create_chat_session(
         # Build context
         context = await chat_context_builder.build_context(
             request.app_id,
-            days_back=90
+            days_back=180
         )
         
         # Create session
