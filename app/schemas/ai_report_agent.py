@@ -19,7 +19,7 @@ class BlockConfig(BaseModel):
 class AIReportAgentCreate(BaseModel):
     agent_name: str
     company: str
-    general_context: str
+    config_context: Dict
     attribution_source: str
     marketing_funnel: List[str]
     color_palette: ColorPalette

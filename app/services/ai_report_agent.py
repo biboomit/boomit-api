@@ -30,7 +30,7 @@ class AIReportAgentService:
             "user_id": user_id,
             "agent_name": agent.agent_name,
             "company": agent.company,
-            "general_context": agent.general_context,
+            "config_context": json.dumps(agent.config_context),
             "attribution_source": agent.attribution_source,
             "marketing_funnel": json.dumps(agent.marketing_funnel),
             "color_palette": agent.color_palette.json(),
@@ -45,7 +45,7 @@ class AIReportAgentService:
             raise RuntimeError(f"Error al guardar: {errors}")
         # Deserialize for response
         response_row = row.copy()
-        for field in ["marketing_funnel", "color_palette", "selected_blocks", "blocks_config"]:
+        for field in ["config_context", "marketing_funnel", "color_palette", "selected_blocks", "blocks_config"]:
             if isinstance(response_row.get(field), str):
                 response_row[field] = json.loads(response_row[field])
         return AIReportAgentInDB(**response_row)
@@ -60,7 +60,7 @@ class AIReportAgentService:
         for row in result:
             agent = dict(row)
             # Deserialize only if value is a string (defensive)
-            for field in ["marketing_funnel", "color_palette", "selected_blocks", "blocks_config"]:
+            for field in ["config_context", "marketing_funnel", "color_palette", "selected_blocks", "blocks_config"]:
                 if isinstance(agent.get(field), str):
                     agent[field] = json.loads(agent[field])
             agents.append(AIReportAgentInDB(**agent))
