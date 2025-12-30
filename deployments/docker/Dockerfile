@@ -15,9 +15,9 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies required for Python packages compilation
+# Install system dependencies required for Python packages compilation and PDF/chart rendering
 # Alpine uses apk package manager instead of apt-get
-# These dependencies are commonly needed for Python packages with C extensions
+# These dependencies are commonly needed for Python packages with C extensions and WeasyPrint/Playwright
 RUN apk update && \
     apk add --no-cache \
         # GCC compiler for building Python packages with C extensions
@@ -28,6 +28,22 @@ RUN apk update && \
         libffi-dev \
         # curl for health checks and debugging
         curl \
+        # WeasyPrint and CairoSVG dependencies
+        cairo \
+        pango \
+        gdk-pixbuf \
+        libxml2 \
+        libxslt \
+        # Playwright dependencies
+        chromium \
+        nss \
+        freetype \
+        harfbuzz \
+        ttf-freefont \
+        # For fontconfig/font rendering
+        fontconfig \
+        # For Jinja2 templates (optional, but useful for HTML rendering)
+        py3-jinja2 \
     # Clean up package cache to reduce image size
     && rm -rf /var/cache/apk/*
 
@@ -58,7 +74,8 @@ RUN chown appuser:appuser /app/marketing-dwh-specs-100b60190539.json
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements.txt,target=requirements.txt \
     python -m pip install --upgrade pip && \
-    python -m pip install -r requirements.txt
+    python -m pip install -r requirements.txt && \
+    python -m playwright install chromium
 
 # Switch to the non-privileged user to run the application.
 # This improves security by not running the application as root.

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Reporte Inteligente</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				margin: 2em;
+			}
+			h1,
+			h2,
+			h3 {
+				color: #222;
+			}
+			.branding {
+				margin-bottom: 2em;
+			}
+			.block {
+				page-break-after: always;
+				margin-bottom: 2em;
+			}
+			.chart-img {
+				max-width: 700px;
+				max-height: 400px;
+				display: block;
+				margin: 1em 0;
+			}
+			.summary {
+				margin-top: 2em;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="branding">
+			<h1>
+				{{ report.report_metadata.agent_name }} - {{
+				report.report_metadata.company }}
+			</h1>
+			<img
+				src="data:image/png;base64,{{ report.report_metadata.branding.logo_base64 }}"
+				alt="Logo"
+				style="max-height: 80px"
+			/>
+			<div style="margin-top: 1em">
+				<b>Fuente de atribución:</b> {{
+				report.report_metadata.attribution_source }}<br />
+				<b>Embudo de marketing:</b> {{
+				report.report_metadata.marketing_funnel|join(', ') }}
+			</div>
+		</div>
+		{% for block in report.blocks %}
+		<div class="block">
+			<h2>{{ block.title }}</h2>
+			<h3>{{ block.description }}</h3>
+			<div>
+				<b>Alcance:</b> {{ block.analysis_scope.date_from }} - {{
+				block.analysis_scope.date_to }}
+			</div>
+			<p>{{ block.narrative }}</p>
+			<ul>
+				{% for insight in block.insights %}
+				<li>{{ insight }}</li>
+				{% endfor %}
+			</ul>
+			{% for chart in block.charts %} {% if chart.chart_img_base64 %}
+			<img
+				class="chart-img"
+				src="data:image/png;base64,{{ chart.chart_img_base64 }}"
+				alt="Gráfico"
+			/>
+			{% endif %}
+			<div><b>{{ chart.chart_title }}</b>: {{ chart.chart_description }}</div>
+			<div><i>{{ chart.business_question }}</i></div>
+			{% endfor %}
+		</div>
+		{% endfor %}
+		<div class="summary">
+			<h2>Resumen</h2>
+			<ul>
+				{% for finding in report.summary.key_findings %}
+				<li>{{ finding }}</li>
+				{% endfor %}
+			</ul>
+			<h3>Recomendaciones</h3>
+			<ul>
+				{% for rec in report.summary.recommendations %}
+				<li>{{ rec }}</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</body>
+</html>
