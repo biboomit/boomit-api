@@ -117,6 +117,7 @@ jobs:
             --from-literal=REVIEWS_ANALYSIS_CLOUD_RUN_URL="${{ secrets.REVIEWS_ANALYSIS_CLOUD_RUN_URL }}" \
             --from-literal=ANDROID_SCRAPER_URL="${{ secrets.ANDROID_SCRAPER_URL }}" \
             --from-literal=IOS_SCRAPER_URL="${{ secrets.IOS_SCRAPER_URL }}" \
+            --from-literal=ANALYTICS_SERVICE_URL="${{ secrets.ANALYTICS_SERVICE_URL }}" \
             --namespace=default \
             --dry-run=client -o yaml | kubectl apply -f -
 
