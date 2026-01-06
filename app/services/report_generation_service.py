@@ -21,6 +21,10 @@ class ReportGenerationService:
         self.reports_table = bigquery_config.get_table_id_with_dataset(
             "AIOutput", "AI_MARKETING_REPORTS")
         self.analytics_table = bigquery_config.get_table_id_with_dataset("takenos-bi", "Dashboard.tabla_final")
+        self.analytics_service_base_url = os.getenv(
+            "ANALYTICS_SERVICE_URL",
+            "https://takenos-dashboard-data-715418856987.us-central1.run.app",
+        )
         self.openai = OpenAIReportGenerationIntegration()
 
     def generate_report(self, agent_id: str, user_id: str, date_from: str = None, date_to: str = None) -> str:
@@ -76,7 +80,7 @@ class ReportGenerationService:
     def _get_analytics_data_with_window(self, date_from: str = None, date_to: str = None):
         logger.info(f"📊 [SERVICE] _get_analytics_data_with_window IN (date_from={date_from}, date_to={date_to})")
         # Construir la URL con los parámetros de fecha si se proporcionan
-        base_url = os.getenv("ANALYTICS_SERVICE_URL", "https://takenos-dashboard-data-715418856987.us-central1.run.app/analytics/csv?limit=10")
+        base_url = f"{self.analytics_service_base_url.rstrip('/')}/analytics/csv?limit=10"
         from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
         url_parts = list(urlparse(base_url))
         query = parse_qs(url_parts[4])
