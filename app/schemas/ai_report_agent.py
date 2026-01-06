@@ -12,7 +12,6 @@ class BlockConfig(BaseModel):
     block_key: str
     title: Optional[str]
     description: Optional[str]
-    logo_base64: Optional[str]
     analysis_dates_from: Optional[str]
     analysis_dates_to: Optional[str]
 
