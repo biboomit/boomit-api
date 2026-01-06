@@ -4,7 +4,7 @@
 # Eliminates 4 High + 12 Medium + 11 Low vulnerabilities compared to slim
 # Alpine reduces total vulnerabilities from 29 to 2 Low-severity issues
 ARG PYTHON_VERSION=3.13
-FROM python:${PYTHON_VERSION}-alpine as base
+FROM python:${PYTHON_VERSION}-alpine AS base
 
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -52,13 +52,10 @@ COPY marketing-dwh-specs-100b60190539.json /app/marketing-dwh-specs-100b60190539
 RUN chown appuser:appuser /app/marketing-dwh-specs-100b60190539.json
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
-# Leverage a bind mount to requirements.txt to avoid having to copy them into
-# this layer. Upgrade pip first to ensure we have the latest version.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    python -m pip install --upgrade pip && \
-    python -m pip install -r requirements.txt
+# requirements.txt se copia explícitamente para que esté disponible durante el build.
+COPY requirements.txt /tmp/requirements.txt
+RUN python -m pip install --upgrade pip && \
+    python -m pip install -r /tmp/requirements.txt
 
 # Switch to the non-privileged user to run the application.
 # This improves security by not running the application as root.
