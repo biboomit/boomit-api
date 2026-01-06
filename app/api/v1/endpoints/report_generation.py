@@ -13,7 +13,6 @@ service = ReportGenerationService()
     summary="Genera un reporte inteligente y lo almacena en BigQuery",
     description="Genera el reporte de marketing, lo almacena (JSON) y responde con el nombre del archivo generado.",
     response_description="Confirmación de almacenamiento exitoso",
-    tags=["Reportes"],
     response_model=dict,
     responses={
         201: {
