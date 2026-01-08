@@ -24,9 +24,8 @@ class AIReportAgentService:
         if self.count_user_agents(user_id) >= 5:
             raise ValueError("Máximo 5 agentes por usuario")
         now = datetime.utcnow()
-        agent_id = str(uuid4())
         row = {
-            "id": agent_id,
+            "id": agent.id,
             "user_id": user_id,
             "agent_name": agent.agent_name,
             "company": agent.company,

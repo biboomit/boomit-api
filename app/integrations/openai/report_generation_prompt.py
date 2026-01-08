@@ -8,18 +8,13 @@ proporcionados como entrada.
 NO generes archivos (PDF, HTML, imágenes).
 NO inventes métricas, bloques ni gráficos.
 Tu salida será procesada por un sistema automático en Python.
-
 ====================================
 DATOS DE ENTRADA
 ====================================
-
 1. DATOS ANALÍTICOS
 Fuente: takenos-bi.Dashboard.tabla_final
-
 {analytics_data}
-
 ------------------------------------
-
 2. DICCIONARIO DE DATOS (DESCRIPCIÓN DE COLUMNAS)
 
 Las siguientes descripciones explican el significado exacto de cada columna.
@@ -105,52 +100,32 @@ Análisis integrado recomendado:
 - Un CPA_install alto con CVR_install_FTD alto sugiere: tráfico caro pero de alta calidad
 - Un CPA_FTD bajo es el objetivo final, independiente de cómo se logre
 - El balance óptimo depende del LTV (Lifetime Value) del cliente y la estrategia de negocio
-
 ------------------------------------
-
 3. CONTEXTO TEMPORAL DE LOS DATOS
-
 Los datos analíticos corresponden a la siguiente ventana temporal:
-
 {data_window}
-
 Interpretación obligatoria:
 - Si la ventana es menor a 60 días, el análisis debe considerarse exploratorio.
-- Evita conclusiones definitivas o estructurales.
-- Prioriza observaciones descriptivas y señales tempranas.
-- Indica explícitamente cualquier limitación derivada del corto período.
-
 ------------------------------------
-
 4. CONFIGURACIÓN DEL REPORTE
 Fuente: marketing-dwh-specs.DWH.DIM_AI_REPORT_AGENT_CONFIGS
-
 {report_config}
-
 ------------------------------------
+5. GUIA DE VISUALIZACIONES Y CONTENIDO
 
+La intención es enriquecer cada bloque con visuales y explicaciones que aporten valor estratégico. Si el bloque original no requiere gráficos, puedes:
+  * construir una tabla resumida de métricas clave,
+  * o traducir los insights en listas o bullets que refuercen la narrativa.
 
-5. CONVENCIONES GENERALES DEL REPORTE
+Cuando haya gráficos, elige el tipo (lineal, barras, área, tabla, etc.) que mejor comunique la comparación a la que apuntes.
+Genera hasta 2 visuales por bloque y asegúrate de que cada uno incluya título, descripción y, si aplica, pregunta de negocio.
+Si no hay datos para un gráfico relevante, enfócate en narrativas robustas (mínimo 2 párrafos) y al menos 2 insights por bloque.
 
-{global_rules}
-
-------------------------------------
-
-6. CONTRATOS DE GRÁFICOS POR BLOQUE
-
-A continuación se definen los contratos de visualización permitidos.
-Debes respetarlos estrictamente.
-
-- Máximo 2 gráficos por bloque.
-- Si un segundo gráfico no aporta valor claro, genera solo uno.
-- Algunos bloques NO permiten gráficos.
-
-{chart_contracts}
-
+Los contratos en {chart_contracts} sirven como referencia, pero puedes extenderlos con complementos descriptivos mientras mantengas la rigurosidad del análisis.
+Incluye siempre gráficos para los bloques que los requieran, siguiendo los contratos definidos.
 ====================================
 INSTRUCCIONES GENERALES
 ====================================
-
 - Usa `config_context` como marco estratégico principal.
 - Prioriza los insights alineados con:
   - objetivoNegocio
@@ -160,52 +135,45 @@ INSTRUCCIONES GENERALES
 - Usa el lenguaje definido en `lenguajeConversiones`.
 - Considera estacionalidad si está definida.
 - Si los datos no permiten una conclusión clara, indícalo explícitamente.
-- No declares tendencias de largo plazo si la ventana de datos es menor a 90 días.
-- No generes proyecciones si los datos no cubren al menos un ciclo completo del negocio.
 - Ajusta el nivel de confianza del lenguaje al nivel de madurez del dataset.
-
 ====================================
 ESTRUCTURA DE SALIDA (JSON OBLIGATORIA)
 ====================================
-
-Devuelve un JSON estrictamente válido con la siguiente estructura:
-
-{
+Devuelve un JSON válido con la siguiente estructura:
+{{
   "blocks": [
-    {
+    {{
       "block_key": "...",
       "title": "...",
       "description": "...",
-      "analysis_scope": {
+      "analysis_scope": {{
         "date_from": "...",
         "date_to": "..."
-      },
+      }},
       "narrative": "Texto alineado al objetivo de negocio",
       "insights": [],
       "charts": [
-        {
+        {{
           "chart_title": "...",
           "chart_description": "...",
           "business_question": "...",
-          "vega_lite_spec": {}
-        }
+          "vega_lite_spec": {{}}
+        }}
       ]
-    }
+    }}
   ],
-  "summary": {
+  "summary": {{
     "key_findings": [],
     "recommendations": []
-  }
-}
-
+  }}
+}}
 ====================================
 REGLAS CRÍTICAS
 ====================================
-
-- Respeta estrictamente los contratos de gráficos.
-- Nunca generes más de 2 gráficos por bloque.
 - No incluyas JavaScript ni HTML.
 - Usa Vega-Lite v5 únicamente.
 - Usa colores del `color_palette` cuando aplique.
 - Si un bloque no admite gráficos, el array `charts` debe estar vacío.
+- `block_key` debe igualar EXACTAMENTE el `block_key` definido en `blocks_config`/`selected_blocks` del `report_config` (respeta el snake_case y los guiones bajos tal como vienen, no inventes variantes).
+- Genera todos los bloques que aparecen en `blocks_config`/`selected_blocks` del `report_config` en el mismo orden, incluso si algunos sólo incluyen texto o están vacíos; no omitas ninguno.
 '''.strip()
