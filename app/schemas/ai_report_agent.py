@@ -16,6 +16,7 @@ class BlockConfig(BaseModel):
     analysis_dates_to: Optional[str]
 
 class AIReportAgentCreate(BaseModel):
+    id: str
     agent_name: str
     company: str
     config_context: Dict
