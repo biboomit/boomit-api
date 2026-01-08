@@ -105,8 +105,9 @@ class OpenAIReportGenerationIntegration:
         data_window_json = json.dumps(data_window, ensure_ascii=False)
 
         # Agrega un log aqui siempre antes de la llamada a OpenAI
-        logger.debug(f"📝 [OPENAI] Preparando prompt con datos: analytics_data={analytics_json[:200]}..., report_config={config_json[:200]}..., chart_contracts={chart_contracts_json[:200]}..., global_rules={global_rules_json[:200]}..., data_window={data_window_json[:200]}...")
+        logger.debug(f"📝 [OPENAI] Preparando prompt con datos: analytics_data={analytics_json[:200]}..., report_config={config_json[:1000]}..., chart_contracts={chart_contracts_json[:200]}..., global_rules={global_rules_json[:200]}..., data_window={data_window_json[:200]}...")
         logger.debug(f"[OPENAI] Longitudes: analytics_json={len(analytics_json)}, config_json={len(config_json)}, chart_contracts_json={len(chart_contracts_json)}, global_rules_json={len(global_rules_json)}, data_window_json={len(data_window_json)}")
+        logger.info(f"[OPENAI] report_config completo: {config_json}")
 
         try:
             prompt = REPORT_GENERATION_PROMPT.format(
@@ -125,9 +126,7 @@ class OpenAIReportGenerationIntegration:
             logger.error(f"[OPENAI] global_rules_json={global_rules_json[:500]} ...")
             logger.error(f"[OPENAI] data_window_json={data_window_json[:500]} ...")
             raise
-        # Log always before OpenAI call
-        logger.info(f"📝 [OPENAI] Prompt enviado a OpenAI: {prompt[:500]}{'...' if len(prompt) > 500 else ''}")
-        logger.info(f"[OPENAI] max_tokens usado: 4000")
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
