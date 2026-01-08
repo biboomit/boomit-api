@@ -80,7 +80,7 @@ class ReportGenerationService:
     def _get_analytics_data_with_window(self, date_from: str = None, date_to: str = None):
         logger.info(f"📊 [SERVICE] _get_analytics_data_with_window IN (date_from={date_from}, date_to={date_to})")
         # Construir la URL con los parámetros de fecha si se proporcionan
-        base_url = f"{self.analytics_service_base_url.rstrip('/')}/analytics/csv?limit=10"
+        base_url = f"{self.analytics_service_base_url.rstrip('/')}/analytics/csv?limit=1000"
         from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
         url_parts = list(urlparse(base_url))
         query = parse_qs(url_parts[4])
