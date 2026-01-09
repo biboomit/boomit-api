@@ -1,0 +1,26 @@
+{
+	"block_key": "Evolución de conversiones",
+	"purpose": "Análisis del flujo entre eventos de conversión",
+	"max_charts": 2,
+	"allowed_chart_types": ["line", "bar"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Cómo evolucionan las conversiones en el tiempo?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": "conversions"
+			},
+			"preferred_chart": "line"
+		},
+		{
+			"chart_slot": 2,
+			"business_question": "¿Dónde se concentran las caídas del funnel?",
+			"recommended_encoding": {
+				"x": "funnel_step",
+				"y": "conversions"
+			},
+			"preferred_chart": "bar"
+		}
+	]
+}

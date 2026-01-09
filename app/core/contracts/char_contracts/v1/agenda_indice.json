@@ -1,0 +1,7 @@
+{
+	"block_key": "Agenda/Índice",
+	"purpose": "Tabla de contenidos del reporte",
+	"max_charts": 0,
+	"allowed_chart_types": [],
+	"notes": "No se permiten gráficos. Listado dinámico de secciones."
+}
