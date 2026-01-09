@@ -66,7 +66,7 @@ class ReportGenerationService:
 
     def _get_agent_config(self, agent_id, user_id):
         logger.info(f"🔍 [SERVICE] _get_agent_config IN: agent_id={agent_id}, user_id={user_id}")
-        query = f"SELECT * FROM `{self.agent_table}` WHERE id = @agent_id AND user_id = @user_id LIMIT 1"
+        query = f"SELECT company, config_context, attribution_source, marketing_funnel, color_palette, selected_blocks, blocks_config FROM `{self.agent_table}` WHERE id = @agent_id AND user_id = @user_id LIMIT 1"
         job_config = bigquery.QueryJobConfig(query_parameters=[
             bigquery.ScalarQueryParameter("agent_id", "STRING", agent_id),
             bigquery.ScalarQueryParameter("user_id", "STRING", user_id)
