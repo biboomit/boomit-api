@@ -64,3 +64,42 @@ class AIReportAgentService:
                     agent[field] = json.loads(agent[field])
             agents.append(AIReportAgentInDB(**agent))
         return agents
+
+    def get_agent_by_id(self, agent_id: str, user_id: str) -> AIReportAgentInDB:
+        """Get a specific agent by ID for the authenticated user."""
+        query = f"SELECT * FROM `{self.table}` WHERE id = @agent_id AND user_id = @user_id LIMIT 1"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("agent_id", "STRING", agent_id),
+                bigquery.ScalarQueryParameter("user_id", "STRING", user_id)
+            ]
+        )
+        result = list(self.client.query(query, job_config=job_config).result())
+        if not result:
+            raise ValueError(f"Agent {agent_id} not found or access denied")
+        agent = dict(result[0])
+        # Deserialize JSON fields
+        for field in ["config_context", "marketing_funnel", "color_palette", "selected_blocks", "blocks_config"]:
+            if isinstance(agent.get(field), str):
+                agent[field] = json.loads(agent[field])
+        return AIReportAgentInDB(**agent)
+
+    def delete_agent(self, agent_id: str, user_id: str) -> bool:
+        """Delete a specific agent by ID for the authenticated user."""
+        # First verify the agent exists and belongs to the user
+        try:
+            self.get_agent_by_id(agent_id, user_id)
+        except ValueError:
+            raise ValueError(f"Agent {agent_id} not found or access denied")
+        
+        # Execute delete
+        query = f"DELETE FROM `{self.table}` WHERE id = @agent_id AND user_id = @user_id"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("agent_id", "STRING", agent_id),
+                bigquery.ScalarQueryParameter("user_id", "STRING", user_id)
+            ]
+        )
+        job = self.client.query(query, job_config=job_config)
+        job.result()  # Wait for completion
+        return True
