@@ -38,15 +38,14 @@ class ReportGenerationService:
         # 3. Leer contratos de gráficos y reglas globales
         chart_data, global_rules = self._get_chart_contracts_and_rules()
 
-        # 4. Llamar a OpenAI para generar el reporte, pasando data_window (comentado temporalmente)
-        '''report_json = self.openai.generate_report(
+        # 4. Llamar a OpenAI para generar el reporte, pasando data_window
+        report_json = self.openai.generate_report(
             analytics_data=analytics_data,
             agent_config=agent_config,
             chart_contracts=chart_data,
             global_rules=global_rules,
             data_window=data_window
-        )'''
-        report_json = []  # Temporalmente vacío para pruebas
+        )
         # Loguea el resultado crudo de OpenAI antes de cualquier acceso/cast
         logger.info(f"[OPENAI RAW RESULT] type={type(report_json)}, value={str(report_json)[:1000]}")
         if not isinstance(report_json, dict):
