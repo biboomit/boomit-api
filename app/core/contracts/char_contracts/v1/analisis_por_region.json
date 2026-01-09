@@ -1,0 +1,26 @@
+{
+	"block_key": "Análisis por región/fuente",
+	"purpose": "Comparación geográfica y por fuente de tráfico",
+	"max_charts": 2,
+	"allowed_chart_types": ["bar"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Qué regiones generan mayor volumen de resultados?",
+			"recommended_encoding": {
+				"x": "region",
+				"y": "revenue"
+			},
+			"preferred_chart": "bar"
+		},
+		{
+			"chart_slot": 2,
+			"business_question": "¿Qué fuentes aportan mayor valor?",
+			"recommended_encoding": {
+				"x": "source",
+				"y": "revenue"
+			},
+			"preferred_chart": "bar"
+		}
+	]
+}
