@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from app.core.config import bigquery_config
 from app.integrations.openai.report_generation_integration import OpenAIReportGenerationIntegration
+from app.integrations.gcp.identity_token_client import GCPIdentityTokenClient
 from google.cloud import bigquery
 import logging
 import requests
@@ -26,6 +27,7 @@ class ReportGenerationService:
             "https://takenos-dashboard-data-715418856987.us-central1.run.app",
         )
         self.openai = OpenAIReportGenerationIntegration()
+        self.gcp_auth_client = GCPIdentityTokenClient()
 
     def generate_report(self, agent_id: str, user_id: str, date_from: str = None, date_to: str = None) -> str:
         logger.info(f"📝 [SERVICE] generate_report IN: agent_id={agent_id}, user_id={user_id}")
@@ -37,14 +39,14 @@ class ReportGenerationService:
         chart_data, global_rules = self._get_chart_contracts_and_rules()
 
         # 4. Llamar a OpenAI para generar el reporte, pasando data_window (comentado temporalmente)
-        report_json = self.openai.generate_report(
+        '''report_json = self.openai.generate_report(
             analytics_data=analytics_data,
             agent_config=agent_config,
             chart_contracts=chart_data,
             global_rules=global_rules,
             data_window=data_window
-        )
-                
+        )'''
+        report_json = []  # Temporalmente vacío para pruebas
         # Loguea el resultado crudo de OpenAI antes de cualquier acceso/cast
         logger.info(f"[OPENAI RAW RESULT] type={type(report_json)}, value={str(report_json)[:1000]}")
         if not isinstance(report_json, dict):
@@ -78,7 +80,7 @@ class ReportGenerationService:
         return dict(result[0])
 
     def _get_analytics_data_with_window(self, date_from: str = None, date_to: str = None):
-        logger.info(f"📊 [SERVICE] _get_analytics_data_with_window IN (date_from={date_from}, date_to={date_to})")
+        logger.info(f"📊 [SERVICE] _get_analytics_data_with_window IN (date_from={date_from}, date_to={date_to}) from Takenos microservice")
         # Construir la URL con los parámetros de fecha si se proporcionan
         base_url = f"{self.analytics_service_base_url.rstrip('/')}/analytics/csv?limit=1000"
         from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
@@ -93,7 +95,11 @@ class ReportGenerationService:
         url_parts[4] = urlencode(query)
         final_url = urlunparse(url_parts)
         logger.info(f"[SERVICE] Llamando a microservicio con URL: {final_url}")
-        response = requests.get(final_url)
+        
+        # Obtener headers con token de identidad para Cloud Run
+        headers = self.gcp_auth_client.get_authorized_headers(self.analytics_service_base_url)
+        
+        response = requests.get(final_url, headers=headers)
         if response.status_code != 200:
             logger.error(f"Error al obtener datos analíticos: {response.status_code} {response.text}")
             raise RuntimeError("No se pudo obtener datos analíticos del microservicio externo")
