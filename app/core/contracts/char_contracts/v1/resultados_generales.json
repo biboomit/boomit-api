@@ -1,0 +1,26 @@
+{
+	"block_key": "Resultados generales",
+	"purpose": "Análisis agregado del período seleccionado",
+	"max_charts": 2,
+	"allowed_chart_types": ["bar", "line"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Cuál fue el resultado total por canal?",
+			"recommended_encoding": {
+				"x": "channel",
+				"y": "revenue"
+			},
+			"preferred_chart": "bar"
+		},
+		{
+			"chart_slot": 2,
+			"business_question": "¿Cómo evolucionaron los resultados durante el período?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": "revenue"
+			},
+			"preferred_chart": "line"
+		}
+	]
+}
