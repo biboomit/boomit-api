@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
 from app.services.report_generation_service import ReportGenerationService
 from app.middleware.auth import get_current_user
 from app.schemas.report_generation_request import ReportGenerationRequest
@@ -46,5 +47,37 @@ def generate_report(
             date_to=req.dateTo
         )
         return {"message": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get(
+    "/report/{report_id}/html",
+    response_class=HTMLResponse,
+    summary="Obtiene el HTML renderizado de un reporte",
+    description="Obtiene el HTML renderizado de un reporte generado previamente usando su report_id.",
+    response_description="HTML del reporte renderizado",
+    responses={
+        200: {
+            "description": "HTML del reporte",
+            "content": {"text/html": {}}
+        },
+        404: {"description": "Reporte no encontrado"},
+        500: {"description": "Error interno del servidor"}
+    }
+)
+def get_report_html(
+    report_id: str,
+    current_user: dict = Depends(get_current_user),
+    service: ReportGenerationService = Depends(lambda: service)
+):
+    """
+    Obtiene el HTML renderizado de un reporte generado previamente.
+    - **report_id**: ID del reporte generado
+    """
+    try:
+        html_content = service.get_report_html(report_id)
+        return HTMLResponse(content=html_content, media_type="text/html")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
