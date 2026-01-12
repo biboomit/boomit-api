@@ -26,6 +26,10 @@ class ReportGenerationService:
             "ANALYTICS_SERVICE_URL",
             "https://takenos-dashboard-data-715418856987.us-central1.run.app",
         )
+        self.report_service_url = os.getenv(
+            "REPORT_SERVICE_URL",
+            "https://boomit-report-715418856987.us-central1.run.app",
+        )
         self.openai = OpenAIReportGenerationIntegration()
         self.gcp_auth_client = GCPIdentityTokenClient()
 
@@ -174,3 +178,48 @@ class ReportGenerationService:
             logger.error(f"💾 [SERVICE] _save_report OUT: error {errors}")
             raise RuntimeError(f"Error al guardar el reporte: {errors}")
         logger.info(f"💾 [SERVICE] _save_report OUT: guardado exitosamente para agent_id: {agent_id}, user_id: {user_id}")
+
+    def get_report_html(self, report_id: str) -> str:
+        """
+        Obtiene el HTML renderizado de un reporte desde el servicio de boomit-report.
+        
+        Args:
+            report_id: ID del reporte a obtener
+            
+        Returns:
+            str: HTML del reporte renderizado
+            
+        Raises:
+            ValueError: Si el reporte no existe
+            RuntimeError: Si hay un error al obtener el reporte
+        """
+        logger.info(f"📝 [SERVICE] get_report_html IN: report_id={report_id}")
+        
+        # URL del servicio de boomit-report en GCP
+        report_url = f"{self.report_service_url}/reports/{report_id}/html"
+        
+        # Obtener headers con token de identidad para Cloud Run
+        headers = self.gcp_auth_client.get_authorized_headers(self.report_service_url)
+        
+        logger.info(f"[SERVICE] Llamando al servicio de reportes: {report_url}")
+        
+        try:
+            response = requests.get(report_url, headers=headers, timeout=30)
+            
+            if response.status_code == 404:
+                logger.warning(f"[SERVICE] Reporte no encontrado: {report_id}")
+                raise ValueError(f"Reporte con ID {report_id} no encontrado")
+            
+            if response.status_code != 200:
+                logger.error(f"[SERVICE] Error al obtener reporte: {response.status_code} {response.text}")
+                raise RuntimeError(f"Error al obtener el reporte: {response.status_code}")
+            
+            logger.info(f"📝 [SERVICE] get_report_html OUT: HTML obtenido exitosamente")
+            return response.text
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"[SERVICE] Timeout al obtener el reporte {report_id}")
+            raise RuntimeError("Timeout al obtener el reporte del servicio")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"[SERVICE] Error de conexión al obtener el reporte: {e}")
+            raise RuntimeError(f"Error de conexión con el servicio de reportes: {str(e)}")
