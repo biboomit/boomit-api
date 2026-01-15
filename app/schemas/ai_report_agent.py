@@ -10,8 +10,6 @@ class ColorPalette(BaseModel):
 
 class BlockConfig(BaseModel):
     block_key: str
-    title: Optional[str]
-    description: Optional[str]
     analysis_dates_from: Optional[str]
     analysis_dates_to: Optional[str]
 

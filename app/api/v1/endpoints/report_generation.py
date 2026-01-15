@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.responses import HTMLResponse
 from app.services.report_generation_service import ReportGenerationService
 from app.middleware.auth import get_current_user
 from app.schemas.report_generation_request import ReportGenerationRequest
+from app.schemas.report_generation_response import ReportGenerationResponse
 
 router = APIRouter()
 
@@ -12,15 +13,18 @@ service = ReportGenerationService()
     "/generate-report",
     status_code=status.HTTP_201_CREATED,
     summary="Genera un reporte inteligente y lo almacena en BigQuery",
-    description="Genera el reporte de marketing, lo almacena (JSON) y responde con el nombre del archivo generado.",
+    description="Genera el reporte de marketing, lo almacena (JSON). Admite top_n para limitar campañas top.",
     response_description="Confirmación de almacenamiento exitoso",
-    response_model=dict,
+    response_model=ReportGenerationResponse,
     responses={
         201: {
             "description": "Reporte generado exitosamente",
             "content": {
                 "application/json": {
-                    "example": {"message": "Successfully generated report structure for agent_id: agent123, user_id: user456"}
+                    "example": {
+                        "message": "Successfully generated report structure for agent_id: agent123, user_id: user456",
+                        "report_id": "7d9f6f24-5e5e-4a4d-8c92-123456789abc"
+                    }
                 }
             }
         },
@@ -28,15 +32,24 @@ service = ReportGenerationService()
     }
 )
 def generate_report(
-    req: ReportGenerationRequest = ...,
+    req: ReportGenerationRequest = Body(
+        ...,
+        example={
+            "agent_id": "agente-123",
+            "dateFrom": "2025-12-01",
+            "dateTo": "2025-12-31",
+            "top_n": 10,
+        },
+    ),
     current_user: dict = Depends(get_current_user),
     service: ReportGenerationService = Depends(lambda: service)
 ):
     """
-    Genera un reporte de marketing inteligente usando los datos analíticos filtrados por fechas.
+    Genera un reporte de marketing inteligente usando los datos analíticos filtrados por fechas y top_n.
     - **agent_id**: ID del agente de configuración de reporte
     - **dateFrom**: Fecha de inicio (YYYY-MM-DD)
     - **dateTo**: Fecha de fin (YYYY-MM-DD)
+    - **top_n**: Cantidad de campañas top a incluir (ranking por FTD luego inversión, default 10)
     """
     user_id = current_user["sub"]
     try:
@@ -44,9 +57,10 @@ def generate_report(
             agent_id=req.agent_id,
             user_id=user_id,
             date_from=req.dateFrom,
-            date_to=req.dateTo
+            date_to=req.dateTo,
+            top_n=req.top_n,
         )
-        return {"message": result}
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -136,11 +136,24 @@ class OpenAIReportGenerationIntegration:
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.7,
-                max_tokens=4000
+                max_completion_tokens=4000
             )
-            logger.info("✅ [OPENAI] Respuesta recibida de OpenAI")
-            raw_content = response.choices[0].message.content
+            req_id = getattr(response, "request_id", None)
+            logger.info(f"✅ [OPENAI] Respuesta recibida de OpenAI req_id={req_id}")
+
+            # Guard rails: evitar parsear respuestas vacías o truncadas
+            choice = response.choices[0]
+            finish_reason = getattr(choice, "finish_reason", None)
+            raw_content = choice.message.content
+            if not raw_content:
+                safe_resp = getattr(response, "model_dump", None)
+                as_dict = safe_resp() if callable(safe_resp) else str(response)
+                logger.error(f"❌ [OPENAI] Respuesta sin content. req_id={req_id} response={str(as_dict)[:2000]}")
+                raise RuntimeError("Respuesta de OpenAI vacía; no se pudo obtener JSON")
+            if finish_reason and finish_reason != "stop":
+                logger.warning(f"⚠️ [OPENAI] finish_reason={finish_reason}, posible truncamiento. req_id={req_id} raw_preview={raw_content[:400]}")
             logger.debug(f"📝 [OPENAI] Respuesta cruda: {raw_content[:1000]}{'...' if len(raw_content) > 1000 else ''}")
+
             try:
                 result = json.loads(raw_content)
             except Exception as e1:
@@ -174,10 +187,6 @@ class OpenAIReportGenerationIntegration:
             if not isinstance(result, dict):
                 logger.error(f"❌ [OPENAI] Respuesta final no es un dict: {type(result)}: {str(result)[:1000]}")
                 raise RuntimeError(f"La respuesta de OpenAI no es un dict: {type(result)}: {str(result)[:1000]}")
-            if 'report_metadata' not in result:
-                logger.error(f"❌ [OPENAI] La clave 'report_metadata' no está en la respuesta: {str(result)[:1000]}")
-            else:
-                logger.info(f"✅ [OPENAI] Respuesta contiene 'report_metadata'.")
             return result
         except Exception as api_exc:
             logger.error(f"❌ [OPENAI] Error al comunicarse con OpenAI API: {api_exc}")
