@@ -1,0 +1,26 @@
+{
+	"block_key": "Resumen ejecutivo",
+	"purpose": "Resumen de desempeño y pacing de inversión",
+	"max_charts": 2,
+	"allowed_chart_types": ["line", "bar"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Cómo avanza la inversión y el desempeño frente al objetivo?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": ["spend", "revenue"]
+			},
+			"preferred_chart": "line"
+		},
+		{
+			"chart_slot": 2,
+			"business_question": "¿El pacing de inversión está adelantado o retrasado?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": "spend"
+			},
+			"preferred_chart": "bar" 
+		}
+	]
+}

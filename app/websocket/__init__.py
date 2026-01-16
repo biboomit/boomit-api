@@ -1,0 +1,1 @@
+"""WebSocket management module."""
