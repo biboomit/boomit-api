@@ -194,6 +194,65 @@ class ReportGenerationService:
         logger.info(f"💾 [SERVICE] _save_report OUT: guardado exitosamente para agent_id: {agent_id}, user_id: {user_id}, report_id: {report_id}")
         return report_id
 
+    def get_latest_report(self, agent_config_id: str, user_id: str) -> dict:
+        """
+        Obtiene el reporte más reciente para un agent_config_id y user_id específicos.
+        
+        Args:
+            agent_config_id: ID de la configuración del agente
+            user_id: ID del usuario
+            
+        Returns:
+            dict: Información del reporte más reciente incluyendo report_id, agent_config_id, generated_at y report_json
+            
+        Raises:
+            ValueError: Si no se encuentra ningún reporte para los parámetros dados
+        """
+        logger.info(f"🔍 [SERVICE] get_latest_report IN: agent_config_id={agent_config_id}, user_id={user_id}")
+        
+        query = f"""
+        SELECT report_id, agent_config_id, generated_at, report_json
+        FROM `{self.reports_table}`
+        WHERE agent_config_id = @agent_config_id AND user_id = @user_id
+        ORDER BY generated_at DESC
+        LIMIT 1
+        """
+        
+        job_config = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("agent_config_id", "STRING", agent_config_id),
+            bigquery.ScalarQueryParameter("user_id", "STRING", user_id)
+        ])
+        
+        result = list(self.client.query(query, job_config=job_config).result())
+        
+        if not result:
+            logger.warning(f"🔍 [SERVICE] get_latest_report OUT: no report found")
+            raise ValueError(f"No se encontró ningún reporte para agent_config_id: {agent_config_id}")
+        
+        row = dict(result[0])
+        logger.info(f"🔍 [SERVICE] get_latest_report OUT: found report_id={row['report_id']}")
+        
+        # Parse report_json if it's a string
+        report_json = row["report_json"]
+        if isinstance(report_json, str):
+            try:
+                report_json = json.loads(report_json)
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing report_json: {e}")
+                report_json = {}
+        
+        # Convert generated_at datetime to ISO string
+        generated_at = row["generated_at"]
+        if isinstance(generated_at, datetime):
+            generated_at = generated_at.isoformat()
+        
+        return {
+            "report_id": row["report_id"],
+            "agent_config_id": row["agent_config_id"],
+            "generated_at": generated_at,
+            "report_json": report_json
+        }
+
     def get_report_html(self, report_id: str) -> str:
         """
         Obtiene el HTML renderizado de un reporte desde el servicio de boomit-report.

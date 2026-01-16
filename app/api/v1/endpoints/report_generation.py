@@ -4,6 +4,7 @@ from app.services.report_generation_service import ReportGenerationService
 from app.middleware.auth import get_current_user
 from app.schemas.report_generation_request import ReportGenerationRequest
 from app.schemas.report_generation_response import ReportGenerationResponse
+from app.schemas.latest_report_response import LatestReportResponse
 
 router = APIRouter()
 
@@ -61,6 +62,52 @@ def generate_report(
             top_n=req.top_n,
         )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get(
+    "/report/latest/{agent_config_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Obtiene el reporte más reciente por agent_config_id",
+    description="Obtiene el reporte más reciente generado para un agent_config_id específico del usuario actual, incluyendo el JSON del reporte.",
+    response_description="Información completa del reporte más reciente",
+    response_model=LatestReportResponse,
+    responses={
+        200: {
+            "description": "Reporte más reciente con JSON completo",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "report_id": "7d9f6f24-5e5e-4a4d-8c92-123456789abc",
+                        "agent_config_id": "agent123",
+                        "generated_at": "2026-01-15T10:30:00",
+                        "report_json": {
+                            "blocks": [],
+                            "metadata": {}
+                        }
+                    }
+                }
+            }
+        },
+        404: {"description": "No se encontró ningún reporte para este agente"},
+        500: {"description": "Error interno del servidor"}
+    }
+)
+def get_latest_report(
+    agent_config_id: str,
+    current_user: dict = Depends(get_current_user),
+    service: ReportGenerationService = Depends(lambda: service)
+):
+    """
+    Obtiene el reporte más reciente para un agent_config_id específico.
+    - **agent_config_id**: ID del agente de configuración de reporte
+    """
+    user_id = current_user["sub"]
+    try:
+        result = service.get_latest_report(agent_config_id, user_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
