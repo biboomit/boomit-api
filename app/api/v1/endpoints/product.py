@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends, status
 from datetime import datetime
 
 from app.core.config import settings
 from app.services.products import ProductService, product_service
-from app.schemas.products import ProductResponse, ProductListResponse
+from app.schemas.products import (
+    ProductResponse, 
+    ProductListResponse, 
+    ProductCreateRequest, 
+    ProductUpdateRequest
+)
 from app.middleware.auth import get_current_user
 
 
@@ -52,3 +57,106 @@ async def get_products(
         )
     except Exception as e:
         raise e
+
+
+@router.get("/{producto_id}", response_model=ProductResponse)
+async def get_product(
+    producto_id: str,
+    service: ProductService = Depends(get_product_service),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a product by ID.
+
+    Args:
+        producto_id (str): Product ID to retrieve
+        service (ProductService): Product service instance
+        current_user (dict): Current authenticated user
+
+    Returns:
+        ProductResponse: Product details
+
+    Raises:
+        HTTPException: 404 if product not found
+    """
+    try:
+        product = await service.get_product_by_id(producto_id)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product with ID {producto_id} not found"
+            )
+        return ProductResponse(**product.to_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+async def create_product(
+    product_data: ProductCreateRequest,
+    service: ProductService = Depends(get_product_service),
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new product.
+
+    Args:
+        product_data (ProductCreateRequest): Product data to create
+        service (ProductService): Product service instance
+        current_user (dict): Current authenticated user
+
+    Returns:
+        ProductResponse: Created product details
+
+    Raises:
+        HTTPException: 500 if creation fails
+    """
+    try:
+        product = await service.create_product(product_data)
+        return ProductResponse(**product.to_dict())
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create product: {str(e)}"
+        )
+
+
+@router.put("/{producto_id}", response_model=ProductResponse)
+async def update_product(
+    producto_id: str,
+    product_data: ProductUpdateRequest,
+    service: ProductService = Depends(get_product_service),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an existing product.
+
+    Args:
+        producto_id (str): Product ID to update
+        product_data (ProductUpdateRequest): Product data to update
+        service (ProductService): Product service instance
+        current_user (dict): Current authenticated user
+
+    Returns:
+        ProductResponse: Updated product details
+
+    Raises:
+        HTTPException: 404 if product not found, 500 if update fails
+    """
+    try:
+        product = await service.update_product(producto_id, product_data)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product with ID {producto_id} not found"
+            )
+        return ProductResponse(**product.to_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update product: {str(e)}"
+        )
