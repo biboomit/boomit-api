@@ -2,6 +2,42 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
+class ProductCreateRequest(BaseModel):
+    empresa_id: str = Field(..., description="Identificador de la empresa propietaria del producto", min_length=1)
+    nombre_producto: str = Field(..., description="Nombre del producto", min_length=1, max_length=255)
+    categoria_producto: str = Field(..., description="Categoría a la que pertenece el producto", min_length=1, max_length=100)
+    estado_producto: str = Field("ACTIVO", description="Estado actual del producto (e.g., ACTIVO, DESCONTINUADO)")
+    fecha_lanzamiento: datetime = Field(..., description="Fecha de lanzamiento del producto")
+    fecha_fin: Optional[datetime] = Field(None, description="Fecha de fin de vida del producto, si aplica")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "empresa_id": "ee0001",
+                "nombre_producto": "Producto A",
+                "categoria_producto": "Electrónica",
+                "estado_producto": "ACTIVO",
+                "fecha_lanzamiento": "2023-01-15T00:00:00",
+                "fecha_fin": None
+            }
+        }
+
+class ProductUpdateRequest(BaseModel):
+    empresa_id: Optional[str] = Field(None, description="Identificador de la empresa propietaria del producto", min_length=1)
+    nombre_producto: Optional[str] = Field(None, description="Nombre del producto", min_length=1, max_length=255)
+    categoria_producto: Optional[str] = Field(None, description="Categoría a la que pertenece el producto", min_length=1, max_length=100)
+    estado_producto: Optional[str] = Field(None, description="Estado actual del producto (e.g., ACTIVO, DESCONTINUADO)")
+    fecha_lanzamiento: Optional[datetime] = Field(None, description="Fecha de lanzamiento del producto")
+    fecha_fin: Optional[datetime] = Field(None, description="Fecha de fin de vida del producto, si aplica")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "estado_producto": "DESCONTINUADO",
+                "fecha_fin": "2025-12-31T00:00:00"
+            }
+        }
+
 class ProductResponse(BaseModel):
     producto_id: str = Field(..., description="Identificador único del producto")
     empresa_id: str = Field(..., description="Identificador de la empresa propietaria del producto")
