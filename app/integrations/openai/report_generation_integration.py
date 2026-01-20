@@ -2,7 +2,7 @@ import json
 import logging
 from openai import OpenAI
 from app.core.config import OpenAIConfig
-from app.integrations.openai.report_generation_prompt import REPORT_GENERATION_PROMPT
+from app.integrations.openai.report_generation_prompt_highchart import REPORT_GENERATION_PROMPT
 
 
 logger = logging.getLogger(__name__)
