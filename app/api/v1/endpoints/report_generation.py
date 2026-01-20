@@ -5,6 +5,8 @@ from app.middleware.auth import get_current_user
 from app.schemas.report_generation_request import ReportGenerationRequest
 from app.schemas.report_generation_response import ReportGenerationResponse
 from app.schemas.latest_report_response import LatestReportResponse
+from app.schemas.block_update_request import BlockUpdateRequest
+from app.schemas.block_update_response import BlockUpdateResponse
 
 router = APIRouter()
 
@@ -138,6 +140,55 @@ def get_report_html(
     try:
         html_content = service.get_report_html(report_id)
         return HTMLResponse(content=html_content, media_type="text/html")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put(
+    "/report/{report_id}/blocks",
+    status_code=status.HTTP_200_OK,
+    summary="Actualiza el array de blocks de un reporte",
+    description="Reemplaza completamente el array de blocks en el report_json de un reporte existente. Solo el propietario del reporte puede actualizarlo.",
+    response_description="Confirmación de actualización exitosa",
+    response_model=BlockUpdateResponse,
+    responses={
+        200: {
+            "description": "Blocks actualizados exitosamente",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Blocks actualizados exitosamente",
+                        "report_id": "4952c857-cce3-474c-aa9c-334ded01d01f",
+                        "blocks_count": 6
+                    }
+                }
+            }
+        },
+        404: {"description": "Reporte no encontrado o usuario no autorizado"},
+        500: {"description": "Error interno del servidor"}
+    }
+)
+def update_report_blocks(
+    report_id: str,
+    req: BlockUpdateRequest = Body(...),
+    current_user: dict = Depends(get_current_user),
+    service: ReportGenerationService = Depends(lambda: service)
+):
+    """
+    Actualiza el array completo de blocks de un reporte.
+    
+    - **report_id**: ID del reporte a actualizar
+    - **blocks**: Array completo de blocks que reemplazará el existente
+    
+    El usuario debe ser propietario del reporte para poder actualizarlo.
+    """
+    user_id = current_user["sub"]
+    try:
+        # Convertir los objetos Pydantic a diccionarios
+        blocks_data = [block.dict() for block in req.blocks]
+        result = service.update_report_blocks(report_id, user_id, blocks_data)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

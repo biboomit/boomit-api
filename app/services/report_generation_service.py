@@ -50,17 +50,10 @@ class ReportGenerationService:
             global_rules=global_rules,
             data_window=data_window
         )
-        # Loguea el resultado crudo de OpenAI antes de cualquier acceso/cast
-        # logger.info(f"[OPENAI RAW RESULT] type={type(report_json)}, value={str(report_json)[:1000]}")
+
         if not isinstance(report_json, dict):
             logger.error(f"[OPENAI ERROR] El resultado de OpenAI no es un dict: {type(report_json)}: {str(report_json)[:1000]}")
             raise RuntimeError(f"El resultado de OpenAI no es un dict: {type(report_json)}: {str(report_json)[:1000]}")
-
-        # Para pruebas: solo retorna la cantidad de registros y el data_window
-        #logger.info(f"[PRUEBA] analytics_data: {len(analytics_data)} registros, data_window: {data_window}")
-        #logger.debug(f"[PRUEBA] chart_data: {json.dumps(chart_data, ensure_ascii=False)}")
-        #logger.debug(f"[PRUEBA] global_rules: {json.dumps(global_rules, ensure_ascii=False)}")
-        #logger.info(f"📝 [SERVICE] generate_report OUT: OK")
 
         # 5. Guardar el reporte generado y retornar el ID
         report_id = self._save_report(agent_id, user_id, report_json)
@@ -297,3 +290,87 @@ class ReportGenerationService:
         except requests.exceptions.RequestException as e:
             logger.error(f"[SERVICE] Error de conexión al obtener el reporte: {e}")
             raise RuntimeError(f"Error de conexión con el servicio de reportes: {str(e)}")
+
+    def update_report_blocks(self, report_id: str, user_id: str, blocks: list) -> dict:
+        """
+        Actualiza el array de blocks en el report_json de un reporte existente.
+        
+        Args:
+            report_id: ID del reporte a actualizar
+            user_id: ID del usuario (para validar propiedad)
+            blocks: Nuevo array de blocks que reemplazará el existente
+            
+        Returns:
+            dict: Información de confirmación con report_id y cantidad de blocks
+            
+        Raises:
+            ValueError: Si el reporte no existe o el usuario no es propietario
+            RuntimeError: Si hay un error al actualizar
+        """
+        logger.info(f"🔄 [SERVICE] update_report_blocks IN: report_id={report_id}, user_id={user_id}, blocks_count={len(blocks)}")
+        
+        # Verificar que el reporte existe y pertenece al usuario
+        query_check = f"""
+        SELECT report_json, user_id
+        FROM `{self.reports_table}`
+        WHERE report_id = @report_id
+        LIMIT 1
+        """
+        
+        job_config_check = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("report_id", "STRING", report_id)
+        ])
+        
+        result = list(self.client.query(query_check, job_config=job_config_check).result())
+        
+        if not result:
+            logger.warning(f"🔄 [SERVICE] update_report_blocks OUT: report not found")
+            raise ValueError(f"No se encontró el reporte con ID: {report_id}")
+        
+        row = dict(result[0])
+        
+        # Validar que el usuario es propietario
+        if row["user_id"] != user_id:
+            logger.warning(f"🔄 [SERVICE] update_report_blocks OUT: user not authorized")
+            raise ValueError(f"No tienes permiso para actualizar este reporte")
+        
+        # Obtener el report_json actual
+        report_json = row["report_json"]
+        if isinstance(report_json, str):
+            try:
+                report_json = json.loads(report_json)
+            except json.JSONDecodeError:
+                report_json = {}
+        
+        # Actualizar el array de blocks
+        report_json["blocks"] = blocks
+        
+        # Actualizar en BigQuery
+        query_update = f"""
+        UPDATE `{self.reports_table}`
+        SET report_json = @report_json,
+            generated_at = @updated_at
+        WHERE report_id = @report_id
+        """
+        
+        job_config_update = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("report_id", "STRING", report_id),
+            bigquery.ScalarQueryParameter("report_json", "STRING", json.dumps(report_json, ensure_ascii=False)),
+            bigquery.ScalarQueryParameter("updated_at", "TIMESTAMP", datetime.utcnow())
+        ])
+        
+        try:
+            query_job = self.client.query(query_update, job_config=job_config_update)
+            query_job.result()
+            
+            logger.info(f"🔄 [SERVICE] update_report_blocks OUT: updated successfully, blocks_count={len(blocks)}")
+            
+            return {
+                "message": "Blocks actualizados exitosamente",
+                "report_id": report_id,
+                "blocks_count": len(blocks)
+            }
+            
+        except Exception as e:
+            logger.error(f"🔄 [SERVICE] update_report_blocks OUT: error {e}")
+            raise RuntimeError(f"Error al actualizar los blocks del reporte: {str(e)}")
