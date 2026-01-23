@@ -50,8 +50,8 @@ def generate_report(
     """
     Genera un reporte de marketing inteligente usando los datos analíticos filtrados por fechas y top_n.
     - **agent_id**: ID del agente de configuración de reporte
-    - **dateFrom**: Fecha de inicio (YYYY-MM-DD)
-    - **dateTo**: Fecha de fin (YYYY-MM-DD)
+    - **date_from**: Fecha de inicio (YYYY-MM-DD)
+    - **date_to**: Fecha de fin (YYYY-MM-DD)
     - **top_n**: Cantidad de campañas top a incluir (ranking por FTD luego inversión, default 10)
     """
     user_id = current_user["sub"]
@@ -59,8 +59,8 @@ def generate_report(
         result = service.generate_report(
             agent_id=req.agent_id,
             user_id=user_id,
-            date_from=req.dateFrom,
-            date_to=req.dateTo,
+            date_from=req.date_from,
+            date_to=req.date_to,
             top_n=req.top_n,
         )
         return result
