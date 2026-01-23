@@ -76,6 +76,50 @@ REPORT_GENERATION_PROMPT = '''
     - Usa timestamps o categorías de fecha ISO.
   - Máximo 2 series por gráfico si mejora claridad; evita sobrecarga visual.
   ====================================
+  REGLAS EXPERTAS DE VISUALIZACIÓN (OBLIGATORIAS)
+  ====================================
+
+  Objetivo: que los gráficos sean útiles para lectura humana y análisis de performance.
+
+  1) REGLA #1: Priorizar evolución (time-series) cuando exista serie_diaria_top
+  - Si existe dataset "serie_diaria_top" con ≥ 7 días con datos, en bloques de performance (evolucion_conversiones, resultados_generales, resumen_ejecutivo, cvr_indices) el gráfico principal DEBE ser de líneas/área por día.
+  - Solo usar barras para rankings/cortes discretos (top campañas, países, networks), nunca como reemplazo de series diarias.
+
+  2) USO CORRECTO DE BARRAS (evitar gráficos "inútiles")
+  - Barras SOLO para comparar entidades del mismo tipo de métrica (ej: FTD por campaña, inversión por campaña, CPA_FTD por campaña).
+  - PROHIBIDO: barras que mezclen unidades distintas en el mismo eje (ej: inversión vs conversiones).
+  - PROHIBIDO: barras comparando una única suma global por métrica sin dimensión (ej: un solo valor de inversión vs un solo valor de FTD). Si solo hay totales globales, usa tabla/resumen + texto, o un KPI card (textual) sin gráfico.
+
+  3) ESCALAS Y LEGIBILIDAD (evitar "5000 vs 3")
+  - Si comparas métricas con magnitudes muy diferentes, NO las pongas en el mismo gráfico con el mismo eje.
+  - Preferir:
+    a) gráficos separados (uno por métrica), o
+    b) normalización con índice base=100 (primer día = 100) para comparar tendencias, o
+    c) usar métricas de eficiencia (CPA/CVR) en vez de mezclar inversión y volumen.
+  - Nunca uses doble eje (y2) salvo que el contrato del bloque lo permita explícitamente. Si no lo permite, separa en 2 charts.
+
+  4) EFICIENCIA ANTES QUE "VOLUMEN + INVERSIÓN"
+  - Si el objetivo es interpretar eficiencia, el gráfico debe ser de CPA_FTD / CPA_evento o CVR (no inversión + conversiones en barras).
+  - Regla práctica:
+    - Para performance semanal: mostrar serie diaria de CPA_FTD y FTD (dos charts o uno solo si hay claridad).
+    - Para diagnóstico: usar scatter (inversión vs CPA_FTD) o ranking (CPA_FTD por campaña) cuando haya múltiples campañas.
+
+  5) EVITAR SLIDES VACÍOS
+  - Cada bloque obligatorio debe tener al menos 1 visual si hay datos suficientes:
+    - Si hay serie diaria → línea/área.
+    - Si no hay serie diaria → ranking por campaña/network/país o tabla de top KPIs.
+  - Si un bloque habla de proyección y no hay base para calcularla, NO "inventes" una proyección: en su lugar muestra un gráfico de tendencia (últimos 7–30 días) + insight "no se proyecta por falta de ciclo completo".
+
+  6) SELECCIÓN AUTOMÁTICA DEL MEJOR CHART SEGÚN DATASET
+  - totales_globales_periodo:
+    - No graficar barras de métricas únicas. Preferir tabla simple de KPIs + narrativa.
+  - top_campanas_mes:
+    - Barras horizontales (ranking) para FTD o CPA_FTD (elige 1 métrica por chart).
+  - serie_diaria_top:
+    - Líneas/área por día para FTD e inversión o CPA_FTD (no mezclar unidades en el mismo chart).
+
+  Estas reglas tienen prioridad sobre preferencias genéricas de visualización.
+  ====================================
   ESTRUCTURA DE SALIDA (JSON)
   ====================================
   {{
