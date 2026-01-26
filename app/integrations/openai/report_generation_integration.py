@@ -1,8 +1,10 @@
 import json
 import logging
+import asyncio
 from openai import OpenAI
 from app.core.config import OpenAIConfig
 from app.integrations.openai.report_generation_prompt_highchart import REPORT_GENERATION_PROMPT
+from app.services.prompt_service import PromptService
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +27,29 @@ class OpenAIReportGenerationIntegration:
         self.api_key = OpenAIConfig().get_api_key()
         self.client = OpenAI(api_key=self.api_key)
         self.model = OpenAIConfig().get_model()
+        self.prompt_service = PromptService()
+        logger.debug("[OPENAI] Servicio de prompts dinámicos inicializado")
 
+    async def _get_prompt_template(self, prompt_key: str = "report_generation_highchart") -> str:
+        """
+        Obtiene el template del prompt desde BigQuery.
+        Si falla, usa el prompt hardcoded como fallback.
+        
+        Args:
+            prompt_key: Identificador del tipo de prompt
+            
+        Returns:
+            String con el template del prompt
+        """
+        try:
+            logger.debug(f"[OPENAI] Intentando cargar prompt dinámico: key={prompt_key}")
+            prompt_content = await self.prompt_service.get_active_prompt(prompt_key)
+            logger.info(f"✅ [OPENAI] Prompt dinámico cargado desde BD: key={prompt_key}")
+            return prompt_content
+        except Exception as e:
+            logger.warning(f"⚠️ [OPENAI] No se pudo cargar prompt desde BD: {e}. Usando hardcoded como fallback.")
+            return REPORT_GENERATION_PROMPT
+    
     def _convert_datetime(self, obj):
         """
         Recursively convert datetime objects to ISO strings in dicts/lists.
@@ -64,7 +88,9 @@ class OpenAIReportGenerationIntegration:
         logger.debug(f"[PROMPT VALIDATION] global_rules_json: {global_rules_json}")
         logger.debug(f"[PROMPT VALIDATION] data_window_json: {data_window_json}")
         try:
-            prompt = REPORT_GENERATION_PROMPT.format(
+            # Obtener prompt dinámico o fallback
+            prompt_template = asyncio.run(self._get_prompt_template())
+            prompt = prompt_template.format(
                 analytics_data=analytics_json,
                 report_config=config_json,
                 chart_contracts=chart_contracts_json,
@@ -110,7 +136,9 @@ class OpenAIReportGenerationIntegration:
         logger.info(f"[OPENAI] report_config completo: {config_json}")
 
         try:
-            prompt = REPORT_GENERATION_PROMPT.format(
+            # Obtener prompt dinámico o fallback
+            prompt_template = asyncio.run(self._get_prompt_template())
+            prompt = prompt_template.format(
                 analytics_data=analytics_json,
                 report_config=config_json,
                 chart_contracts=chart_contracts_json,
