@@ -51,16 +51,16 @@ async def get_companies(
         raise e
 
 
-@router.get("/{empresa_id}", response_model=CompanyResponse)
+@router.get("/{company_id}", response_model=CompanyResponse)
 async def get_company(
-    empresa_id: str,
+    company_id: str,
     service: CompanyService = Depends(get_company_service),
     current_user: dict = Depends(get_current_user)
 ):
     """Get a company by ID.
 
     Args:
-        empresa_id (str): Company ID to retrieve
+        company_id (str): Company ID to retrieve
         service (CompanyService): Company service instance
         current_user (dict): Current authenticated user
 
@@ -71,11 +71,11 @@ async def get_company(
         HTTPException: 404 if company not found
     """
     try:
-        company = await service.get_company_by_id(empresa_id)
+        company = await service.get_company_by_id(company_id)
         if not company:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Company with ID {empresa_id} not found"
+                detail=f"Company with ID {company_id} not found"
             )
         return CompanyResponse(**company.to_dict())
     except HTTPException:
@@ -116,9 +116,9 @@ async def create_company(
         )
 
 
-@router.put("/{empresa_id}", response_model=CompanyResponse)
+@router.put("/{company_id}", response_model=CompanyResponse)
 async def update_company(
-    empresa_id: str,
+    company_id: str,
     company_data: CompanyUpdateRequest,
     service: CompanyService = Depends(get_company_service),
     current_user: dict = Depends(get_current_user)
@@ -126,7 +126,7 @@ async def update_company(
     """Update an existing company.
 
     Args:
-        empresa_id (str): Company ID to update
+        company_id (str): Company ID to update
         company_data (CompanyUpdateRequest): Company data to update
         service (CompanyService): Company service instance
         current_user (dict): Current authenticated user
@@ -138,11 +138,11 @@ async def update_company(
         HTTPException: 404 if company not found, 500 if update fails
     """
     try:
-        company = await service.update_company(empresa_id, company_data)
+        company = await service.update_company(company_id, company_data)
         if not company:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Company with ID {empresa_id} not found"
+                detail=f"Company with ID {company_id} not found"
             )
         return CompanyResponse(**company.to_dict())
     except HTTPException:
