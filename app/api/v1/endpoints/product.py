@@ -59,16 +59,16 @@ async def get_products(
         raise e
 
 
-@router.get("/{producto_id}", response_model=ProductResponse)
+@router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(
-    producto_id: str,
+    product_id: str,
     service: ProductService = Depends(get_product_service),
     current_user: dict = Depends(get_current_user)
 ):
     """Get a product by ID.
 
     Args:
-        producto_id (str): Product ID to retrieve
+        product_id (str): Product ID to retrieve
         service (ProductService): Product service instance
         current_user (dict): Current authenticated user
 
@@ -79,11 +79,11 @@ async def get_product(
         HTTPException: 404 if product not found
     """
     try:
-        product = await service.get_product_by_id(producto_id)
+        product = await service.get_product_by_id(product_id)
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Product with ID {producto_id} not found"
+                detail=f"Product with ID {product_id} not found"
             )
         return ProductResponse(**product.to_dict())
     except HTTPException:
@@ -124,9 +124,9 @@ async def create_product(
         )
 
 
-@router.put("/{producto_id}", response_model=ProductResponse)
+@router.put("/{product_id}", response_model=ProductResponse)
 async def update_product(
-    producto_id: str,
+    product_id: str,
     product_data: ProductUpdateRequest,
     service: ProductService = Depends(get_product_service),
     current_user: dict = Depends(get_current_user)
@@ -134,7 +134,7 @@ async def update_product(
     """Update an existing product.
 
     Args:
-        producto_id (str): Product ID to update
+        product_id (str): Product ID to update
         product_data (ProductUpdateRequest): Product data to update
         service (ProductService): Product service instance
         current_user (dict): Current authenticated user
@@ -146,11 +146,11 @@ async def update_product(
         HTTPException: 404 if product not found, 500 if update fails
     """
     try:
-        product = await service.update_product(producto_id, product_data)
+        product = await service.update_product(product_id, product_data)
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Product with ID {producto_id} not found"
+                detail=f"Product with ID {product_id} not found"
             )
         return ProductResponse(**product.to_dict())
     except HTTPException:
