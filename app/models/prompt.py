@@ -106,19 +106,13 @@ class PromptModel:
         query = f"""
         SELECT *
         FROM `{self.TABLE_ID}`
-        WHERE prompt_key = @prompt_key
-          AND is_active = true
-        ORDER BY prompt_version DESC
+        WHERE 
+           is_active = true
+        ORDER BY created_at DESC
         LIMIT 1
         """
         
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("prompt_key", "STRING", prompt_key)
-            ]
-        )
-        
-        query_job = self.client.query(query, job_config=job_config)
+        query_job = self.client.query(query)
         results = list(query_job.result())
         
         if not results:
