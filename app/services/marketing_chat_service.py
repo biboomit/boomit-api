@@ -46,27 +46,32 @@ class MarketingChatService:
         - Marketing metrics glossary
         - Response guidelines
         """
+        # Defensive checks for None values
+        if context is None:
+            logger.error("Context is None in _build_system_prompt")
+            context = {}
+        
         report_id = context.get("report_id", "unknown")
-        agent_config = context.get("agent_config", {})
-        report_data = context.get("report_data", {})
-        data_window = context.get("data_window", {})
+        agent_config = context.get("agent_config") or {}
+        report_data = context.get("report_data") or {}
+        data_window = context.get("data_window") or {}
         
         # Extract key information
         company = agent_config.get("company", "Cliente")
-        config_context = agent_config.get("config_context", {})
+        config_context = agent_config.get("config_context") or {}
         
         # Build period string
-        date_from = data_window.get("date_from", "N/A")
-        date_to = data_window.get("date_to", "N/A")
+        date_from = data_window.get("date_from", "N/A") if data_window else "N/A"
+        date_to = data_window.get("date_to", "N/A") if data_window else "N/A"
         period_str = f"{date_from} a {date_to}"
         
         # Extract summary
-        summary = report_data.get("summary", {})
-        key_findings = summary.get("key_findings", [])
-        recommendations = summary.get("recommendations", [])
+        summary = report_data.get("summary") or {}
+        key_findings = summary.get("key_findings") or []
+        recommendations = summary.get("recommendations") or []
         
         # Extract blocks
-        blocks = report_data.get("blocks", [])
+        blocks = report_data.get("blocks") or []
         
         # Build context summary
         context_summary = f"""
@@ -145,10 +150,13 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
                 if charts:
                     context_summary += "Gráficos y datos:\n"
                     for chart in charts:
+                        if not isinstance(chart, dict):
+                            continue
+                            
                         chart_title = chart.get("chart_title", "Sin título")
                         chart_desc = chart.get("chart_description", "")
                         business_q = chart.get("business_question", "")
-                        highcharts_spec = chart.get("highcharts_spec", {})
+                        highcharts_spec = chart.get("highcharts_spec") or {}
                         
                         context_summary += f"  📊 {chart_title}\n"
                         if chart_desc:
@@ -157,12 +165,15 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
                             context_summary += f"     Pregunta de negocio: {business_q}\n"
                         
                         # Extract data from series
-                        series_data = highcharts_spec.get("series", [])
+                        series_data = highcharts_spec.get("series") or []
                         if series_data:
                             context_summary += "     Datos:\n"
                             for serie in series_data[:3]:  # Limit to 3 series per chart
+                                if not isinstance(serie, dict):
+                                    continue
+                                    
                                 serie_name = serie.get("name", "Serie")
-                                data_values = serie.get("data", [])
+                                data_values = serie.get("data") or []
                                 
                                 # Format data preview (first and last values if many)
                                 if isinstance(data_values, list) and len(data_values) > 0:
@@ -174,9 +185,9 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
                                     context_summary += f"       - {serie_name}: {data_str}\n"
                         
                         # Extract categories (x-axis labels) if present
-                        xaxis_categories = highcharts_spec.get("xAxis", {})
+                        xaxis_categories = highcharts_spec.get("xAxis") or {}
                         if isinstance(xaxis_categories, dict):
-                            categories = xaxis_categories.get("categories", [])
+                            categories = xaxis_categories.get("categories") or []
                             if categories and len(categories) > 0:
                                 if len(categories) <= 5:
                                     cat_str = str(categories)

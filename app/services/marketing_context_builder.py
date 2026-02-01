@@ -186,10 +186,10 @@ class MarketingContextBuilder:
             generated_at,
             report_json,
             user_id,
-            status
+            date_from,
+            date_to
         FROM `{self.reports_table}`
         WHERE report_id = @report_id
-          AND status = 'completed'
         LIMIT 1
         """
         
@@ -202,10 +202,10 @@ class MarketingContextBuilder:
         try:
             results = self.client.query(query, job_config=job_config).result()
             row = next(results, None)
-            
+         
             if not row:
                 raise BoomitAPIException(
-                    message=f"Report {report_id} not found or not completed",
+                    message=f"Report {report_id} not found",
                     status_code=404,
                     error_code="REPORT_NOT_FOUND"
                 )
@@ -221,23 +221,15 @@ class MarketingContextBuilder:
                     status_code=403,
                     error_code="REPORT_ACCESS_DENIED"
                 )
-            
-            # Parse report_json to extract data_window
-            report_json = json.loads(row.report_json)
-            
+
             # Extract data_window from report metadata or first block
             data_window = None
-            if "data_window" in report_json:
-                data_window = report_json["data_window"]
-            elif report_json.get("blocks") and len(report_json["blocks"]) > 0:
-                # Try to extract from first block's analysis_scope
-                first_block = report_json["blocks"][0]
-                if "analysis_scope" in first_block:
-                    scope = first_block["analysis_scope"]
-                    data_window = {
-                        "date_from": scope.get("date_from"),
-                        "date_to": scope.get("date_to")
-                    }
+            # extract data window from date_from and date_to present in row
+            if row.date_from and row.date_to:
+                data_window = {
+                    "date_from": row.date_from,
+                    "date_to": row.date_to
+                }
             
             return {
                 "report_id": row.report_id,
@@ -267,7 +259,7 @@ class MarketingContextBuilder:
         """
         query = f"""
         SELECT
-            agent_config_id,
+            id,
             company,
             config_context,
             attribution_source,
@@ -276,7 +268,7 @@ class MarketingContextBuilder:
             selected_blocks,
             blocks_config
         FROM `{self.agent_config_table}`
-        WHERE agent_config_id = @agent_config_id
+        WHERE id = @agent_config_id
         LIMIT 1
         """
         
@@ -300,7 +292,7 @@ class MarketingContextBuilder:
             
             # Parse JSON fields
             config = {
-                "agent_config_id": row.agent_config_id,
+                "agent_config_id": row.id,
                 "company": row.company,
                 "attribution_source": row.attribution_source
             }
