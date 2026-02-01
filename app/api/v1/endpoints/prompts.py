@@ -390,7 +390,7 @@ async def create_prompt_from_python_file(
 
 
 @router.get(
-    "/{prompt_key}/download",
+    "/download",
     summary="Descargar prompt activo como archivo Python",
     description="""
     Descarga el prompt activo en formato .py para editarlo localmente.
@@ -400,38 +400,37 @@ async def create_prompt_from_python_file(
     - Útil para el flujo: download → editar → upload
     """
 )
-async def download_active_prompt(prompt_key: str):
+async def download_active_prompt():
     """
     Descargar el prompt activo como archivo .py
     
     **Uso en Postman:**
     - Method: GET
-    - URL: /api/v1/prompts/report_generation_highchart/download
+    - URL: /api/v1/prompts/download
     - Send and Download
     
     **Flujo recomendado:**
-    1. GET /prompts/{key}/download → Descargar archivo
+    1. GET /prompts/download → Descargar archivo
     2. Editar localmente en VS Code
     3. POST /prompts/upload-py → Subir nueva versión
     """
-    logger.info(f"[API_PROMPTS] GET /prompts/{prompt_key}/download")
+    logger.info(f"[API_PROMPTS] GET /prompts/download")
     
     service = PromptService()
     
     try:
         # Obtener el prompt activo
-        prompt_content = await service.get_active_prompt(prompt_key)
-        prompt_details = await service.get_prompt_details(prompt_key)
+        prompt_content = await service.get_active_prompt()
         
         # Generar contenido del archivo Python
-        file_content = f"""# Prompt para OpenAI - {prompt_key}
-# Versión: {prompt_details.prompt_version}
-# Creado por: {prompt_details.created_by}
-# Fecha: {prompt_details.created_at}
-# Descripción: {prompt_details.description or 'N/A'}
+        file_content = f"""# Prompt para OpenAI 
+# Versión: {prompt_content.prompt_version}
+# Creado por: {prompt_content.created_by}
+# Fecha: {prompt_content.created_at}
+# Descripción: {prompt_content.description or 'N/A'}
 
 REPORT_GENERATION_PROMPT = '''
-{prompt_content}
+{prompt_content.prompt_content}
 '''.strip()
 """
         
@@ -440,7 +439,7 @@ REPORT_GENERATION_PROMPT = '''
             content=file_content,
             media_type="text/x-python",
             headers={
-                "Content-Disposition": f"attachment; filename={prompt_key}_v{prompt_details.prompt_version}.py"
+                "Content-Disposition": f"attachment; filename=active_prompt_v{prompt_content.prompt_version}.py"
             }
         )
         

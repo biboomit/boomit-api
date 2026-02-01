@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from google.cloud import bigquery
 from datetime import datetime, timedelta
-
+from app.core.config import bigquery_config
 from app.core.config import settings
 from app.core.exceptions import DatabaseConnectionError
 
@@ -27,7 +27,6 @@ class ChatContextBuilder:
     
     def __init__(self):
         """Initialize BigQuery client using config standard."""
-        from app.core.config import bigquery_config
         self.client = bigquery_config.get_client()
         self.reviews_table = bigquery_config.get_table_id("DIM_REVIEWS_HISTORICO")
         self.analysis_table = bigquery_config.get_table_id_with_dataset("AIOutput", "Reviews_Analysis")
@@ -197,30 +196,30 @@ class ChatContextBuilder:
         # Positive reviews (4-5 stars)
         positive_query = f"""
             SELECT
-                review_texto as text,
-                review_rating as rating,
-                review_fecha as date
+                content as text,
+                score as rating,
+                fecha as date
             FROM `{self.reviews_table}`
             WHERE app_id = @app_id
-                AND review_rating >= 4
-                AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
-                AND LENGTH(review_texto) > 50
-            ORDER BY review_fecha DESC
+                AND score >= 4
+                AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+                AND LENGTH(content) > 50
+            ORDER BY fecha DESC
             LIMIT @limit
         """
 
         # Negative reviews (1-2 stars)
         negative_query = f"""
             SELECT
-                review_texto as text,
-                review_rating as rating,
-                review_fecha as date
+                content as text,
+                score as rating,
+                fecha as date
             FROM `{self.reviews_table}`
             WHERE app_id = @app_id
-                AND review_rating <= 2
-                AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
-                AND LENGTH(review_texto) > 50
-            ORDER BY review_fecha DESC
+                AND score <= 2
+                AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+                AND LENGTH(content) > 50
+            ORDER BY fecha DESC
             LIMIT @limit
         """
 
@@ -282,10 +281,10 @@ class ChatContextBuilder:
         query = f"""
         SELECT
             COUNT(*) as total_reviews,
-            AVG(review_rating) as avg_rating
+            AVG(score) as avg_rating
         FROM `{self.reviews_table}`
         WHERE app_id = @app_id
-          AND review_fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+          AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
         """
 
         job_config = bigquery.QueryJobConfig(
