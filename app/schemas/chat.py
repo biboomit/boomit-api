@@ -28,12 +28,12 @@ class ChatMessage(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Request to create a new chat session"""
     
-    app_id: str = Field(..., description="App ID to chat about")
+    id: str = Field(..., description="ID(app_id or report_id) to chat about")
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "app_id": "com.lulubit"
+                "id": "com.lulubit"
             }
         }
     )
@@ -43,7 +43,7 @@ class CreateSessionResponse(BaseModel):
     """Response after creating a chat session"""
     
     session_id: str = Field(..., description="Unique session identifier")
-    app_id: str = Field(..., description="App ID associated with this session")
+    id: str = Field(..., description="ID(app_id or report_id) associated with this session")
     created_at: datetime = Field(..., description="Session creation timestamp")
     expires_at: datetime = Field(..., description="Session expiration timestamp")
     
@@ -51,7 +51,7 @@ class CreateSessionResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "session_id": "session_abc123xyz",
-                "app_id": "com.lulubit",
+                "id": "com.lulubit",
                 "created_at": "2025-12-08T10:00:00Z",
                 "expires_at": "2025-12-08T10:30:00Z"
             }
@@ -77,7 +77,7 @@ class ChatHistoryResponse(BaseModel):
     """Response with chat conversation history"""
     
     session_id: str = Field(..., description="Session identifier")
-    app_id: str = Field(..., description="App ID")
+    id: str = Field(..., description="ID(app_id or report_id) associated with this session")
     messages: List[ChatMessage] = Field(..., description="Conversation messages")
     created_at: datetime = Field(..., description="Session creation timestamp")
     last_activity: datetime = Field(..., description="Last activity timestamp")
@@ -86,7 +86,7 @@ class ChatHistoryResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "session_id": "session_abc123xyz",
-                "app_id": "com.lulubit",
+                "id": "com.lulubit",
                 "messages": [
                     {
                         "role": "user",
@@ -108,13 +108,11 @@ class ChatHistoryResponse(BaseModel):
 
 class ChatSession(BaseModel):
     """Internal model for chat session storage"""
-    
     session_id: str
     user_id: str
-    app_id: str
+    id: str
     context: Dict[str, Any]  # Loaded analysis context
     messages: List[ChatMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_activity: datetime = Field(default_factory=datetime.utcnow)
-    
     model_config = ConfigDict(arbitrary_types_allowed=True)
