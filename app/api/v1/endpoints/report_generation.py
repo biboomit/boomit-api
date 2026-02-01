@@ -39,8 +39,8 @@ def generate_report(
         ...,
         example={
             "agent_id": "agente-123",
-            "dateFrom": "2025-12-01",
-            "dateTo": "2025-12-31",
+            "date_from": "2025-12-01",
+            "date_to": "2025-12-31",
             "top_n": 10,
         },
     ),

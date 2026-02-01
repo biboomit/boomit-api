@@ -30,7 +30,7 @@ class OpenAIReportGenerationIntegration:
         self.prompt_service = PromptService()
         logger.debug("[OPENAI] Servicio de prompts dinámicos inicializado")
 
-    async def _get_prompt_template(self, prompt_key: str = "report_generation_highchart") -> str:
+    async def _get_prompt_template(self, prompt_key: str = "-*-") -> str:
         """
         Obtiene el template del prompt desde BigQuery.
         Si falla, usa el prompt hardcoded como fallback.
