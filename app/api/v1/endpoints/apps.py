@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
 
+from app.core.config import settings
 from app.services.apps import AppService, app_service
-from app.schemas.apps import AppDetailsResponse
+from app.services.insights import InsightsService, insights_service
+from app.schemas.apps import AppSearchResponse, AppDetailsResponse
+from app.schemas.insights import PaginatedAppInsightsResponse
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
 import logging
@@ -15,38 +19,227 @@ def get_app_service() -> AppService:
     return app_service
 
 
-@router.get("/{app_id}", response_model=AppDetailsResponse)
-async def get_app_details(
-    app_id: str = Path(..., description="App ID to fetch details for"),
+def get_insights_service() -> InsightsService:
+    return insights_service
+
+
+@router.get("/search", response_model=AppDetailsResponse)
+async def search_app_by_id(
+    appId: str = Query(..., description="App ID to search for (exact match required)"),
+    store: str = Query(
+        ..., 
+        description="App store: 'android' or 'ios'",
+        regex="^(?i)(android|ios)$"
+    ),
+    country: str = Query(
+        ..., 
+        description="Country code (ISO 2-letter format, e.g., 'US', 'VE', 'gt')",
+        regex="^(?i)[A-Z]{2}$"
+    ),
     service: AppService = Depends(get_app_service),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get detailed information for a specific app by its ID.
+    """Search for an app by ID with store and country filters.
 
-    This endpoint retrieves complete app information from DIM_MAESTRO_REVIEWS
-    combined with rating data from DIM_REVIEWS_HISTORICO.
+    This endpoint searches for an app by its exact app ID. If the app exists in 
+    DIM_MAESTRO_REVIEWS, it returns the stored data. If not found, it scrapes 
+    the app data from the appropriate store (Google Play or App Store), inserts 
+    it into the database, and returns the information.
+    
+    The scraping process also fetches reviews from the last 7 days if no reviews 
+    exist for the app.
 
     Args:
-        app_id: Unique app identifier (e.g., 'com.farmatodo.app')
+        appId: Exact app ID to search for (e.g., 'com.example.app') (required)
+        store: App store type - 'android' or 'ios' (required)
+        country: Country code in ISO 2-letter format (required)
         service: App service dependency
         current_user: Authenticated user dependency
 
     Returns:
-        AppDetailsResponse with app details including:
-        - Basic app information (name, developer, category, etc.)
-        - Download statistics
+        AppDetailsResponse containing complete app information:
+        - Basic app metadata (name, developer, category, etc.)
+        - Download statistics  
         - Average rating and total ratings from reviews
-        - App store metadata
+        - App store information
 
     Raises:
-        HTTPException: 404 if app not found, 500 for server errors
+        HTTPException: 
+            - 400 for invalid parameters
+            - 404 if app not found in store
+            - 500 for server errors
 
-    Example:
-        GET /api/v1/apps/com.farmatodo.app
+    Examples:
+        GET /api/v1/apps/search?appId=com.lulubit&store=android&country=gt
         
         Response:
         {
-            "appId": "com.farmatodo.app",
+            "appId": "com.lulubit",
+            "appName": "Lulubit: Compra Bitcoin Cripto",
+            "store": "android",
+            "developer": "Lulubit",
+            "ratingAverage": 4.53,
+            "totalRatings": 430,
+            "downloads": 50000,
+            "lastUpdate": "2025-11-03",
+            "iconUrl": "https://play-lh.googleusercontent.com/...",
+            "category": "Finanzas"
+        }
+    """
+    
+    # Validate parameters
+    if not appId or not appId.strip():
+        raise HTTPException(
+            status_code=400, 
+            detail="appId parameter cannot be empty"
+        )
+    
+    # Normalize parameters
+    store = store.lower()
+    country = country.lower()
+    
+    try:
+        logger.info(f"Searching app by ID: {appId}, store: {store}, country: {country}")
+        
+        # Get or create app (scrapes if not exists)
+        app_details = await service.get_or_create_app(
+            app_id=appId.strip(),
+            store=store,
+            country=country
+        )
+
+        logger.info(f"Successfully retrieved/created app: {appId}")
+        return app_details
+
+    except ValueError as ve:
+        # App not found in store or scraping error
+        logger.error(f"App not found or scraping error for {appId}: {ve}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"App '{appId}' not found in {store} store: {str(ve)}"
+        )
+    except DatabaseConnectionError as e:
+        logger.error(f"Database error in search_app_by_id: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in search_app_by_id for '{appId}': {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/insights", response_model=PaginatedAppInsightsResponse)
+async def get_app_insights(
+    appId: str = Query(..., description="App ID to get insights for (required)"),
+    fromDate: Optional[str] = Query(
+        None,
+        description="Start date filter in YYYY-MM-DD format (optional)",
+        regex="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
+    to: Optional[str] = Query(
+        None,
+        description="End date filter in YYYY-MM-DD format (optional)",
+        regex="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(
+        settings.DEFAULT_PER_PAGE,
+        ge=1,
+        le=settings.MAX_PER_PAGE,
+        description="Number of items per page"
+    ),
+    service: InsightsService = Depends(get_insights_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get AI-generated insights for a specific app with pagination.
+
+    This endpoint retrieves insights derived from AI analysis of app reviews.
+    The insights are extracted from the Reviews_Analysis table in the AIOutput dataset where 
+    json_data contains structured analysis including strengths, weaknesses,
+    recommendations, and observations.
+
+    Args:
+        appId: App ID to get insights for (required)
+        fromDate: Optional start date filter (YYYY-MM-DD format)
+        to: Optional end date filter (YYYY-MM-DD format)
+        page: Page number (default: 1)
+        per_page: Number of items per page (default: configured value)
+        service: Insights service dependency
+        current_user: Authenticated user dependency
+
+    Returns:
+        PaginatedAppInsightsResponse containing structured insights with:
+        - insights: Array of insight items
+        - total: Total number of insights
+        - page: Current page number
+        - per_page: Number of items per page
+
+    Raises:
+        HTTPException: 500 if database query fails
+        HTTPException: 401 if user is not authenticated
+
+    Example:
+        GET /api/v1/apps/insights?appId=com.example.app&fromDate=2024-01-01&to=2024-12-31&page=1&per_page=10
+    """
+    try:
+        logger.info(f"Getting insights for app: {appId}, page: {page}, per_page: {per_page}")
+        
+        insights_response = await service.get_app_insights(
+            app_id=appId,
+            from_date=fromDate,
+            to_date=to,
+            page=page,
+            per_page=per_page,
+        )
+        
+        logger.info(f"Successfully retrieved {len(insights_response.insights)} insights for app: {appId} (page {page})")
+        return insights_response
+        
+    except ValueError as e:
+        logger.warning(f"Pagination validation error for app {appId}: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except DatabaseConnectionError as e:
+        logger.error(f"Database error getting insights for app {appId}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve insights from database"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error getting insights for app {appId}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
+        
+@router.get("/{app_id}", response_model=AppDetailsResponse)
+async def get_app_details(
+    app_id: str,
+    service: AppService = Depends(get_app_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get detailed information for a specific app by ID.
+
+    This endpoint retrieves complete information for a single app from DIM_MAESTRO_REVIEWS
+    including ratings data from DIM_REVIEWS_HISTORICO.
+
+    Args:
+        app_id: Unique identifier of the app to retrieve
+        service: App service dependency
+        current_user: Authenticated user dependency
+
+    Returns:
+        AppDetailsResponse containing complete app information including ratings
+
+    Raises:
+        HTTPException: 404 if app not found, 400 for invalid app_id, 500 for server errors
+
+    Examples:
+        GET /api/v1/apps/123456789
+        
+        Response:
+        {
+            "appId": "123456789",
             "appName": "Farmatodo",
             "store": "android",
             "developer": "Farmatodo Inc.",
@@ -55,33 +248,43 @@ async def get_app_details(
             "downloads": 2100000,
             "lastUpdate": "2024-08-10",
             "iconUrl": "https://play-lh.googleusercontent.com/...",
-            "category": "Health & Fitness"
+            "category": "Health & Fitness", 
         }
     """
-    if not app_id.strip():
+    
+    # Validar que app_id no esté vacío
+    if not app_id or not app_id.strip():
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="app_id cannot be empty"
         )
-
+    
     try:
+        logger.info(f"Getting details for app: {app_id}")
+        
+        # Obtener detalles de la aplicación
         app_details = await service.get_app_details(app_id.strip())
         
         if not app_details:
             logger.warning(f"App not found: {app_id}")
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail=f"App with ID '{app_id}' not found"
             )
-
-        logger.info(f"App details retrieved successfully: {app_id}")
+        
+        logger.info(f"Successfully retrieved details for app: {app_id}")
         return app_details
+        
+    except DatabaseConnectionError as db_exc:
+        logger.error(f"Database connection error while getting app details for {app_id}: {db_exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Database connection error. Please try again later."
+        )
+    except Exception as exc:
+        logger.error(f"Unexpected error while getting app details for {app_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
 
-    except HTTPException:
-        raise
-    except DatabaseConnectionError as e:
-        logger.error(f"Database error in get_app_details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logger.error(f"Unexpected error in get_app_details for {app_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")

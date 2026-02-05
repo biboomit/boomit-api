@@ -1,0 +1,34 @@
+{
+	"version": "v1",
+	"global_rules_file": "_global_rules.json",
+	"blocks": [
+		{
+			"name": "Portada con branding",
+			"contract_file": "portada_branding.json"
+		},
+		{ "name": "Agenda/Índice", "contract_file": "agenda_indice.json" },
+		{ "name": "Resumen ejecutivo", "contract_file": "resumen_ejecutivo.json" },
+		{ "name": "Proyecciones", "contract_file": "proyecciones.json" },
+		{
+			"name": "Resultados generales",
+			"contract_file": "resultados_generales.json"
+		},
+		{
+			"name": "Análisis por región/fuente",
+			"contract_file": "analisis_por_region.json"
+		},
+		{
+			"name": "Evolución de conversiones",
+			"contract_file": "evolucion_conversiones.json"
+		},
+		{ "name": "CVR e índices:", "contract_file": "cvr_indices.json" },
+		{
+			"name": "Aprendizajes y recomendaciones",
+			"contract_file": "aprendizajes_recomendaciones.json"
+		},
+		{
+			"name": "Pantalla de despedida",
+			"contract_file": "pantalla_despedida.json"
+		}
+	]
+}
