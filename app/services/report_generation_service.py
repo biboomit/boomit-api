@@ -40,15 +40,11 @@ class ReportGenerationService:
         agent_config = self._get_agent_config(agent_id, user_id)
         # 2. Consultar datos analíticos y calcular data_window
         analytics_data, data_window = self._get_analytics_data_with_window(date_from=date_from, date_to=date_to, top_n=top_n)
-        # 3. Leer contratos de gráficos y reglas globales
-        chart_data, global_rules = self._get_chart_contracts_and_rules()
 
-        # 4. Llamar a OpenAI para generar el reporte, pasando data_window
+        # 3. Llamar a OpenAI para generar el reporte, pasando data_window
         report_json = self.openai.generate_report(
             analytics_data=analytics_data,
             agent_config=agent_config,
-            chart_contracts=chart_data,
-            global_rules=global_rules,
             data_window=data_window
         )
 
