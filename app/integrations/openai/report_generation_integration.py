@@ -68,7 +68,7 @@ class OpenAIReportGenerationIntegration:
         else:
             return obj
         
-    def validate_prompt(self, analytics_data=None, agent_config=None, data_window=None):
+    def validate_prompt(self, analytics_data=None, agent_config=None, data_window=None, analytics_explanation=""):
         """
         Valida el template del prompt de OpenAI sin hacer la petición, para evitar gastar tokens.
         """
@@ -89,7 +89,8 @@ class OpenAIReportGenerationIntegration:
             prompt = prompt_template.format(
                 analytics_data=analytics_json,
                 report_config=config_json,
-                data_window=data_window_json
+                data_window=data_window_json,
+                analytics_explanation=analytics_explanation
             )
             logger.info("[PROMPT VALIDATION] El template del prompt se construyó correctamente.")
             logger.debug(f"[PROMPT VALIDATION] Prompt ejemplo: {prompt[:1000]}")
@@ -98,7 +99,7 @@ class OpenAIReportGenerationIntegration:
             logger.error(f"[PROMPT VALIDATION] Error al construir el prompt: {e}")
             return False
     
-    def generate_report(self, analytics_data, agent_config, data_window=None):
+    def generate_report(self, analytics_data, agent_config, data_window=None, analytics_explanation=""):
         logger.info("📝 [OPENAI] Generando reporte con OpenAI...")
         """
         Generate a report using OpenAI API.
@@ -106,6 +107,8 @@ class OpenAIReportGenerationIntegration:
             analytics_data: List of analytics dicts
             agent_config: Dict with agent configuration
             data_window: Dict with data window info (optional)
+            analytics_explanation: Provider-specific description of the data format,
+                dictionary and block rules (injected into prompt)
         Returns:
             Structured JSON response from OpenAI
         """
@@ -129,7 +132,8 @@ class OpenAIReportGenerationIntegration:
             prompt = prompt_template.format(
                 analytics_data=analytics_json,
                 report_config=config_json,
-                data_window=data_window_json
+                data_window=data_window_json,
+                analytics_explanation=analytics_explanation
             )
             logger.debug(f"[OPENAI] Longitud del prompt final: {len(prompt)}")
         except Exception as e:
