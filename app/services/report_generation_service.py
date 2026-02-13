@@ -28,10 +28,11 @@ class ReportGenerationService:
         agent_config = self._get_agent_config(agent_id, user_id)
 
         # 2. Resolver el proveedor de analytics según la configuración del agente
-        provider_name = agent_config.get("analytics_provider_2")
+        provider_name = agent_config.get("company")
         if not provider_name:
-            raise ValueError("El agente no tiene configurado un analytics_provider en la configuración del reporte.")
-        analytics_provider = get_analytics_provider(provider_name)
+            raise ValueError("El agente no tiene configurado un company name en la configuración del reporte.")
+        formatted_provider_name = provider_name.lower().replace(" ", "_")
+        analytics_provider = get_analytics_provider(formatted_provider_name)
 
         # 3. Consultar datos analíticos via el proveedor (data + data_window + explicación)
         analytics_data, data_window, analytics_explanation = analytics_provider.get_analytics(
@@ -71,7 +72,7 @@ class ReportGenerationService:
 
     def _get_agent_config(self, agent_id, user_id):
         logger.info(f"🔍 [SERVICE] _get_agent_config IN: agent_id={agent_id}, user_id={user_id}")
-        query = f"SELECT company, config_context, attribution_source, marketing_funnel, color_palette, selected_blocks, blocks_config, analytics_provider_2 FROM `{self.agent_table}` WHERE id = @agent_id AND user_id = @user_id LIMIT 1"
+        query = f"SELECT company, config_context, attribution_source, marketing_funnel, color_palette, selected_blocks, blocks_config FROM `{self.agent_table}` WHERE id = @agent_id AND user_id = @user_id LIMIT 1"
         job_config = bigquery.QueryJobConfig(query_parameters=[
             bigquery.ScalarQueryParameter("agent_id", "STRING", agent_id),
             bigquery.ScalarQueryParameter("user_id", "STRING", user_id)

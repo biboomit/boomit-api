@@ -37,21 +37,14 @@ class OpenAIReportGenerationIntegration:
         """
         Obtiene el template del prompt desde BigQuery.
         Si falla, usa el prompt hardcoded como fallback.
-        
+        Se retorna el prompt desde el codigo fuente
         Args:
             prompt_key: Identificador del tipo de prompt
             
         Returns:
             String con el template del prompt
         """
-        try:
-            logger.debug(f"[OPENAI] Intentando cargar prompt dinámico: key={prompt_key}")
-            prompt_content = await self.prompt_service.get_active_prompt(prompt_key)
-            logger.info(f"✅ [OPENAI] Prompt dinámico cargado desde BD: key={prompt_key}")
-            return prompt_content
-        except Exception as e:
-            logger.warning(f"⚠️ [OPENAI] No se pudo cargar prompt desde BD: {e}. Usando hardcoded como fallback.")
-            return REPORT_GENERATION_PROMPT
+        return REPORT_GENERATION_PROMPT
     
     def _convert_datetime(self, obj):
         """
