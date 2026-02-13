@@ -73,16 +73,16 @@ OBJETIVO: Visualizar tasas de conversión del funnel y identificar caídas
 DATASETS A USAR:
   - funnel_etapas (para el FUNNEL_CHART, tiene 2 etapas y CVR calculado)
   - serie_diaria_por_network (para evolución temporal, agregar por fecha)
-
+  - totales_por_network (para comparar CVR entre networks)
 GRÁFICOS OBLIGATORIOS (2 gráficos):
   1) FUNNEL_CHART mostrando: visita_landing → solicita_tc_enviada
      - Dataset: funnel_etapas (usar campos visita_landing, solicita_tc_enviada)
      - Highcharts: type="funnel", data format: [["Visita Landing", valor], ["Solicita TC Enviada", valor]]
      - IMPORTANTE: Formato de data DEBE ser array de arrays, NO objetos con name
      - Incluir plotOptions básicas: dataLabels enabled, center, neckWidth, neckHeight
-  2) LINE_TIME_SERIES de cvr_landing_enviada diario
-     - Dataset: serie_diaria_por_network (agregar por fecha: sum(solicita_tc_enviada)/sum(visita_landing))
-     - Highcharts: type="line", xAxis.type="datetime", categories=[fechas]
+  2) LINE_TIME_SERIES de totales_por_network mostrando evolución de CVR por network
+     - Dataset: totales_por_network (usar network como categoría y cvr_landing_enviada como valor)
+     - Highcharts: type="bar" 
 
 INSIGHTS OBLIGATORIOS:
   - Usar cvr_landing_enviada de funnel_etapas para el CVR global del período
