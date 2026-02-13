@@ -1,0 +1,9 @@
+{
+	"global_rules": {
+		"max_charts_per_block": 2,
+		"chart_engine": "vega-lite",
+		"vega_lite_version": 5,
+		"narrative_required": true,
+		"charts_optional": true
+	}
+}

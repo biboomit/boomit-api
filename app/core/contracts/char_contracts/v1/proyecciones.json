@@ -1,0 +1,28 @@
+{
+	"block_key": "Proyecciones",
+	"purpose": "Estimaciones futuras por producto y región",
+	"max_charts": 2,
+	"allowed_chart_types": ["line", "area"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Cuál es la proyección de ventas por producto?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": "projected_revenue",
+				"color": "product"
+			},
+			"preferred_chart": "line"
+		},
+		{
+			"chart_slot": 2,
+			"business_question": "¿Cómo se distribuye la proyección por región?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": "projected_revenue",
+				"color": "region"
+			},
+			"preferred_chart": "area"
+		}
+	]
+}

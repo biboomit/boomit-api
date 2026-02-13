@@ -1,0 +1,17 @@
+{
+	"block_key": "Aprendizajes y recomendaciones",
+	"purpose": "Insights accionables para toma de decisiones",
+	"max_charts": 1,
+	"allowed_chart_types": ["bar"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Dónde están las principales oportunidades de mejora?",
+			"recommended_encoding": {
+				"x": "area_of_opportunity",
+				"y": "impact_score"
+			},
+			"preferred_chart": "bar"
+		}
+	]
+}
