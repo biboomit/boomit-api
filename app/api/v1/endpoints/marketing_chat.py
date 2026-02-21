@@ -26,6 +26,7 @@ from app.middleware.auth import get_current_user
 from app.services.marketing_context_builder import marketing_context_builder
 from app.services.marketing_chat_service import marketing_chat_service
 from app.utils.session_manager import session_manager
+from app.core.config import settings
 from app.core.exceptions import (
     ChatSessionNotFoundError,
     ChatSessionExpiredError,
@@ -87,10 +88,19 @@ async def create_marketing_chat_session(
             )
         
         # Build context (includes ownership validation)
-        context = await marketing_context_builder.build_context(
-            request.report_id,
-            user_id
-        )
+        # MCP mode: load only key_findings + recommendations + resumen_ejecutivo
+        # Standard mode: load full context with all blocks and charts
+        if settings.MCP_ENABLED:
+            context = await marketing_context_builder.build_minimal_context(
+                request.report_id,
+                user_id
+            )
+            logger.info(f"MCP minimal context loaded for report {request.report_id}")
+        else:
+            context = await marketing_context_builder.build_context(
+                request.report_id,
+                user_id
+            )
         
         # Create session using the generic session manager
         # We'll store report_id and agent_config_id in a way compatible with existing structure

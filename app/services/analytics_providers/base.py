@@ -66,6 +66,36 @@ class AnalyticsProvider(ABC):
     # ------------------------------------------------------------------
 
     @property
+    def metrics_glossary(self) -> str:
+        """
+        Full metrics glossary injected into the standard chat system prompt.
+
+        Override in each provider to match the client's specific funnel
+        terminology (e.g. Install/FTD for Takenos, Visita Landing/Solicita TC
+        Enviada for Banco BCT).
+        """
+        return (
+            "\n**Glosario de Métricas de Marketing:**\n"
+            "- **Inversión**: Gasto publicitario total (USD)\n"
+            "- **CPA**: Costo por adquisición = inversión / conversiones (KPI crítico)\n"
+            "\n**Funnel de Conversión:** Inversión → Conversión"
+        )
+
+    @property
+    def metrics_glossary_compact(self) -> str:
+        """
+        Compact metrics glossary for MCP-enabled chat prompts.
+
+        Override in each provider to match the client's specific funnel terminology.
+        """
+        return (
+            "\n**Métricas clave:**\n"
+            "- Inversión: gasto publicitario (USD)\n"
+            "- CPA: costo por adquisición (KPI crítico)\n"
+            "- Funnel: Inversión → Conversión"
+        )
+
+    @property
     def endpoint_path(self) -> str:
         """Path for the analytics CSV endpoint. Override if different."""
         return "/analytics/csv"

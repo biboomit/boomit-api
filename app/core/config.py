@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = Field(default="gpt-4o")
     OPENAI_CHAT_MODEL: str = Field(default="gpt-4o-mini")  # Model for chat feature
 
+    # MCP (Model Context Protocol) Configuration
+    MCP_ENABLED: bool = Field(default=True, description="Enable MCP for marketing chat (feature flag)")
+    MCP_BIGQUERY_SERVER_URL: str = Field(default="http://localhost:8100/mcp", description="URL of the MCP BigQuery Server")
+    MCP_MAX_TOOL_ROUNDS: int = Field(default=5, description="Max tool-calling iterations per message")
+
     # File Upload Configuration
     MAX_FILE_SIZE: int = Field(default=10 * 1024 * 1024)  # 10MB
     ALLOWED_FILE_TYPES: str = Field(default="pdf,excel,csv")
