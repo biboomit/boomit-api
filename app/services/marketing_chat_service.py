@@ -5,6 +5,7 @@ Handles AI-powered chat responses for marketing report analysis.
 """
 
 import logging
+from dataclasses import dataclass
 from app.integrations.mcp.host import MCPChatHost
 from typing import AsyncGenerator, Dict, Any, List
 from openai import AsyncOpenAI
@@ -15,6 +16,28 @@ from app.schemas.marketing_chat import MarketingChatSession
 from app.core.exceptions import BoomitAPIException
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TokenUsageStats:
+    """Token usage statistics for a single chat turn."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    tool_calls_count: int = 0
+    llm_calls_count: int = 0
+    mode: str = "direct"
+
+    def to_log_str(self) -> str:
+        prompt_k = round(self.prompt_tokens / 1000, 2)
+        completion_k = round(self.completion_tokens / 1000, 2)
+        return (
+            f"mode={self.mode} | "
+            f"prompt={self.prompt_tokens}tok ({prompt_k}k) | "
+            f"completion={self.completion_tokens}tok ({completion_k}k) | "
+            f"total={self.total_tokens}tok | "
+            f"tool_calls={self.tool_calls_count} llm_calls={self.llm_calls_count}"
+        )
 
 
 class MarketingChatService:
@@ -378,6 +401,10 @@ Si terminaste de analizar los datos y no hay más que decir, la respuesta termin
 - Para bloques específicos usa tool_get_report_blocks.
 - "Mejor CPA" = valor más BAJO. "Peor CPA" = valor más ALTO.
 - Una respuesta corta con datos concretos es mejor que una larga con relleno.
+
+**REGLA #4 — EFICIENCIA DE HERRAMIENTAS:**
+Cuando necesites datos de múltiples secciones, solicita TODAS las herramientas necesarias
+en una sola respuesta. No pidas una sección, esperes el resultado y luego pidas otra.
 """
         logger.debug(f"Built MCP system prompt for report {report_id}:\n{prompt}")
         return prompt
@@ -422,6 +449,13 @@ Si terminaste de analizar los datos y no hay más que decir, la respuesta termin
         })
         
         return messages
+
+    def _log_token_usage(self, usage: TokenUsageStats, session: MarketingChatSession) -> None:
+        """Log token usage for cost monitoring and MCP vs direct comparison."""
+        logger.info(
+            f"\U0001f4ca [TOKEN-USAGE] session={session.session_id} report={session.report_id} | "
+            f"{usage.to_log_str()}"
+        )
     
     async def stream_response(
         self,
@@ -453,9 +487,18 @@ Si terminaste de analizar los datos y no hay más que decir, la respuesta termin
         if self.mcp_enabled:
             try:
                 user_id = session.user_id
+                usage = TokenUsageStats(mode="mcp")
                 async for token in self.mcp_host.stream_with_tools(messages, user_id):
-                    yield token
-                
+                    if isinstance(token, dict) and token.get("__type") == "usage":
+                        usage.prompt_tokens = token.get("prompt_tokens", 0)
+                        usage.completion_tokens = token.get("completion_tokens", 0)
+                        usage.total_tokens = token.get("total_tokens", 0)
+                        usage.tool_calls_count = token.get("tool_calls_count", 0)
+                        usage.llm_calls_count = token.get("llm_calls_count", 0)
+                    else:
+                        yield token
+
+                self._log_token_usage(usage, session)
                 logger.info(f"MCP streaming completed for session {session.session_id}")
                 
             except BoomitAPIException:
@@ -472,23 +515,33 @@ Si terminaste de analizar los datos y no hay más que decir, la respuesta termin
         
         # Original path: direct OpenAI streaming (when MCP_ENABLED=false)
         try:
+            usage = TokenUsageStats(mode="direct")
+
             # Call OpenAI with streaming
             stream = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 stream=True,
                 temperature=0.2,
-                max_tokens=1500  # Slightly higher for marketing analysis
+                max_tokens=1500,  # Slightly higher for marketing analysis
+                stream_options={"include_usage": True}
             )
             
             # Stream tokens
             async for chunk in stream:
+                # Capture usage from the final chunk (OpenAI sends it with stream_options)
+                if chunk.usage:
+                    usage.prompt_tokens = chunk.usage.prompt_tokens
+                    usage.completion_tokens = chunk.usage.completion_tokens
+                    usage.total_tokens = chunk.usage.total_tokens
+                    usage.llm_calls_count = 1
                 # Extract content delta
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         yield delta.content
-            
+
+            self._log_token_usage(usage, session)
             logger.info(f"Streaming completed for session {session.session_id}")
             
         except Exception as e:
