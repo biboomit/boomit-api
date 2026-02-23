@@ -10,11 +10,40 @@ import json
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from google.cloud import bigquery
-
-from app.core.config import settings
+from app.services.analytics_providers.factory import get_analytics_provider
 from app.core.exceptions import DatabaseConnectionError, BoomitAPIException
+from app.core.config import bigquery_config
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_metrics_glossary(company_name: str):
+    """
+    Instantiate the analytics provider that corresponds to *company_name* and
+    return ``(metrics_glossary, metrics_glossary_compact)``.
+
+    Returns ``(None, None)`` when the provider cannot be resolved so that the
+    chat service can fall back to its built-in defaults without crashing.
+    """
+    try:
+        provider_key = company_name.strip().lower().replace(" ", "_")
+        logger.info(f"\U0001f4d6 [GLOSSARY] Resolving metrics glossary for company='{company_name}' → provider_key='{provider_key}'")
+        provider = get_analytics_provider(provider_key)
+        glossary = provider.metrics_glossary
+        glossary_compact = provider.metrics_glossary_compact
+        logger.info(
+            f"\u2705 [GLOSSARY] Resolved provider={type(provider).__name__}, "
+            f"glossary_len={len(glossary) if glossary else 0}, "
+            f"glossary_compact_len={len(glossary_compact) if glossary_compact else 0}"
+        )
+        logger.debug(f"[GLOSSARY] Full glossary preview: {glossary[:200] if glossary else 'None'}...")
+        return glossary, glossary_compact
+    except Exception as e:
+        logger.warning(
+            f"\u274c [GLOSSARY] Could not resolve analytics provider glossary for company "
+            f"'{company_name}': {e}. Chat will use default glossary."
+        )
+        return None, None
 
 
 class MarketingContextCache:
@@ -74,7 +103,6 @@ class MarketingContextBuilder:
     
     def __init__(self):
         """Initialize BigQuery client and cache"""
-        from app.core.config import bigquery_config
         self.client = bigquery_config.get_client()
         self.reports_table = "marketing-dwh-specs.AIOutput.AI_MARKETING_REPORTS"
         self.agent_config_table = "marketing-dwh-specs.DWH.DIM_AI_REPORT_AGENT_CONFIGS"
@@ -136,6 +164,17 @@ class MarketingContextBuilder:
             # Parse report JSON
             report_json = json.loads(report_data["report_json"])
             
+            # Resolve provider-specific metrics glossary
+            metrics_glossary, metrics_glossary_compact = _resolve_metrics_glossary(
+                agent_config.get("company", "")
+            )
+
+            logger.info(
+                f"\U0001f4cb [CONTEXT-FULL] report={report_id}, company='{agent_config.get('company', '')}', "
+                f"glossary_resolved={'YES' if metrics_glossary else 'NO (using default)'}, "
+                f"blocks={len(report_json.get('blocks', []))}"
+            )
+
             # Build context
             context = {
                 "report_id": report_id,
@@ -144,6 +183,8 @@ class MarketingContextBuilder:
                 "report_data": report_json,
                 "agent_config": agent_config,
                 "data_window": report_data.get("data_window"),
+                "metrics_glossary": metrics_glossary,
+                "metrics_glossary_compact": metrics_glossary_compact,
                 "report_generated_at": report_data["generated_at"].isoformat() if report_data.get("generated_at") else None,
                 "context_generated_at": datetime.utcnow().isoformat()
             }
@@ -169,6 +210,121 @@ class MarketingContextBuilder:
                 details={"report_id": report_id, "error": str(e)}
             )
     
+    async def build_minimal_context(
+        self,
+        report_id: str,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        Build lightweight context for MCP-enabled sessions.
+        
+        Loads only:
+        - key_findings and recommendations (from summary)
+        - resumen_ejecutivo block (high-level synthesis)
+        - data_window (period metadata)
+        - agent_config company and objectives
+        
+        All other blocks are fetched on-demand via MCP tools.
+        This reduces session creation time and system prompt tokens (~800-1000 vs ~3000-5000).
+        
+        Args:
+            report_id: Report identifier
+            user_id: User identifier (for ownership validation)
+        
+        Returns:
+            Minimal context dictionary
+        """
+        logger.info(f"Building minimal MCP context for report {report_id}, user {user_id}")
+
+        # Check cache first (same cache as full context)
+        cache_key = f"mcp_{report_id}"
+        cached_context = self.cache.get(cache_key)
+        if cached_context:
+            if cached_context.get("user_id") != user_id:
+                raise BoomitAPIException(
+                    message="Access denied to this report",
+                    status_code=403,
+                    error_code="REPORT_ACCESS_DENIED"
+                )
+            return cached_context
+
+        try:
+            # Load report data (validates ownership)
+            report_data = await self._get_report_data(report_id, user_id)
+
+            # Load agent config (for company + objectives only=config_context + marketing funnel)
+            agent_config = await self._get_agent_config(report_data["agent_config_id"])
+
+            # Parse full JSON but extract only what we need
+            report_json = json.loads(report_data["report_json"])
+            summary = report_json.get("summary", {})
+            blocks = report_json.get("blocks", [])
+
+            # Extract only resumen_ejecutivo block
+            resumen_block = None
+            available_block_keys = []
+            for block in blocks:
+                bk = block.get("block_key", "")
+                available_block_keys.append(bk)
+                if bk == "resumen_ejecutivo":
+                    resumen_block = block
+
+            # Resolve provider-specific metrics glossary
+            metrics_glossary, metrics_glossary_compact = _resolve_metrics_glossary(
+                agent_config.get("company", "")
+            )
+
+            logger.info(
+                f"\U0001f4cb [CONTEXT-MCP] report={report_id}, company='{agent_config.get('company', '')}', "
+                f"glossary_resolved={'YES' if metrics_glossary else 'NO (using default)'}, "
+                f"blocks_available={len(available_block_keys)}, "
+                f"resumen_ejecutivo={'found' if resumen_block else 'missing'}"
+            )
+
+            # Build minimal context
+            context = {
+                "report_id": report_id,
+                "agent_config_id": report_data["agent_config_id"],
+                "user_id": user_id,
+                "is_mcp": True,  # Flag to identify MCP sessions
+                "data_window": report_data.get("data_window"),
+                "company": agent_config.get("company", "Cliente"),
+                "config_context": agent_config.get("config_context", {}),
+                "marketing_funnel": agent_config.get("marketing_funnel", {}),
+                "key_findings": summary.get("key_findings", []),
+                "recommendations": summary.get("recommendations", []),
+                "resumen_ejecutivo": resumen_block,
+                "available_blocks": available_block_keys,
+                "metrics_glossary": metrics_glossary,
+                "metrics_glossary_compact": metrics_glossary_compact,
+                "report_generated_at": (
+                    report_data["generated_at"].isoformat()
+                    if report_data.get("generated_at") else None
+                ),
+                "context_generated_at": datetime.utcnow().isoformat()
+            }
+
+            # Cache it
+            self.cache.set(cache_key, context)
+
+            logger.info(
+                f"Minimal MCP context built for report {report_id}: "
+                f"resumen_ejecutivo={'found' if resumen_block else 'missing'}, "
+                f"{len(available_block_keys)} blocks available, "
+                f"{len(summary.get('key_findings', []))} key findings"
+            )
+
+            return context
+
+        except BoomitAPIException:
+            raise
+        except Exception as e:
+            logger.error(f"Error building minimal context: {e}")
+            raise DatabaseConnectionError(
+                f"Failed to build minimal chat context for report {report_id}",
+                details={"report_id": report_id, "error": str(e)}
+            )
+
     async def _get_report_data(
         self,
         report_id: str,
@@ -262,11 +418,7 @@ class MarketingContextBuilder:
             id,
             company,
             config_context,
-            attribution_source,
-            marketing_funnel,
-            color_palette,
-            selected_blocks,
-            blocks_config
+            marketing_funnel
         FROM `{self.agent_config_table}`
         WHERE id = @agent_config_id
         LIMIT 1
@@ -293,8 +445,7 @@ class MarketingContextBuilder:
             # Parse JSON fields
             config = {
                 "agent_config_id": row.id,
-                "company": row.company,
-                "attribution_source": row.attribution_source
+                "company": row.company
             }
             
             # Parse JSON fields if they exist
@@ -303,15 +454,6 @@ class MarketingContextBuilder:
             
             if row.marketing_funnel:
                 config["marketing_funnel"] = json.loads(row.marketing_funnel) if isinstance(row.marketing_funnel, str) else row.marketing_funnel
-            
-            if row.color_palette:
-                config["color_palette"] = json.loads(row.color_palette) if isinstance(row.color_palette, str) else row.color_palette
-            
-            if row.selected_blocks:
-                config["selected_blocks"] = json.loads(row.selected_blocks) if isinstance(row.selected_blocks, str) else row.selected_blocks
-            
-            if row.blocks_config:
-                config["blocks_config"] = json.loads(row.blocks_config) if isinstance(row.blocks_config, str) else row.blocks_config
             
             return config
             

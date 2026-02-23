@@ -5,6 +5,8 @@ Handles AI-powered chat responses for marketing report analysis.
 """
 
 import logging
+from dataclasses import dataclass
+from app.integrations.mcp.host import MCPChatHost
 from typing import AsyncGenerator, Dict, Any, List
 from openai import AsyncOpenAI
 
@@ -14,6 +16,28 @@ from app.schemas.marketing_chat import MarketingChatSession
 from app.core.exceptions import BoomitAPIException
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TokenUsageStats:
+    """Token usage statistics for a single chat turn."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    tool_calls_count: int = 0
+    llm_calls_count: int = 0
+    mode: str = "direct"
+
+    def to_log_str(self) -> str:
+        prompt_k = round(self.prompt_tokens / 1000, 2)
+        completion_k = round(self.completion_tokens / 1000, 2)
+        return (
+            f"mode={self.mode} | "
+            f"prompt={self.prompt_tokens}tok ({prompt_k}k) | "
+            f"completion={self.completion_tokens}tok ({completion_k}k) | "
+            f"total={self.total_tokens}tok | "
+            f"tool_calls={self.tool_calls_count} llm_calls={self.llm_calls_count}"
+        )
 
 
 class MarketingChatService:
@@ -28,11 +52,16 @@ class MarketingChatService:
     """
     
     def __init__(self):
-        """Initialize OpenAI client"""
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        """Initialize OpenAI client (and MCP host if enabled)"""
+        self.mcp_enabled = settings.MCP_ENABLED
         self.model = getattr(settings, "OPENAI_CHAT_MODEL", "gpt-4o-mini")
         
-        logger.info(f"MarketingChatService initialized with model: {self.model}")
+        if self.mcp_enabled:  # noqa: PLC0415
+            self.mcp_host = MCPChatHost()
+            logger.info(f"MarketingChatService initialized with MCP host, model: {self.model}")
+        else:
+            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            logger.info(f"MarketingChatService initialized with direct OpenAI, model: {self.model}")
     
     def _build_system_prompt(self, context: Dict[str, Any]) -> str:
         """
@@ -75,8 +104,13 @@ class MarketingChatService:
         
         # Build context summary
         context_summary = f"""
-Eres un experto senior en Análisis de Marketing Digital y Performance de Campañas Publicitarias. 
-Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo preguntas sobre campañas, métricas y performance.
+Eres un analista de datos de marketing digital. Tu trabajo es responder preguntas
+analizando EXCLUSIVAMENTE los datos del reporte proporcionado abajo.
+
+Regla clave: SIEMPRE presenta primero los datos relevantes que el reporte SÍ contiene.
+Si una parte de la pregunta requiere información que no está en el reporte, presenta
+primero lo que sí puedes responder con datos, y luego indica qué parte no se puede
+responder por falta de datos.
 
 **Cliente:** {company}
 **Reporte ID:** {report_id}
@@ -197,34 +231,184 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
         else:
             context_summary += "No hay bloques de análisis disponibles.\n"
         
-        # Add metrics glossary
+        # Add metrics glossary (dynamic, provider-specific terminology)
+        _default_glossary = (
+            "\n**Glosario de Métricas de Marketing:**\n"
+            "- **Inversión**: Gasto publicitario total (USD)\n"
+            "- **Install**: Número de instalaciones generadas por la campaña\n"
+            "- **Apertura cuenta exitosa**: Registros completos después de instalar\n"
+            "- **FTD (First Time Deposit)**: Primer depósito de usuario - métrica crítica de conversión final\n"
+            "- **CPA_install**: Costo por instalación = inversión / install\n"
+            "- **CPA_apertura_cuenta_exitosa**: Costo por apertura exitosa = inversión / apertura_cuenta_exitosa\n"
+            "- **CPA_FTD**: Costo por primer depósito = inversión / FTD (KPI crítico)\n"
+            "- **CVR_install_FTD**: Tasa de conversión = FTD / install\n"
+            "\n**Funnel de Conversión:** Inversión → Install → Apertura → FTD"
+        )
+        resolved_glossary = context.get("metrics_glossary")
+        using_provider_glossary = resolved_glossary is not None
+        context_summary += resolved_glossary or _default_glossary
+        logger.info(
+            f"\U0001f4d6 [SYSTEM-PROMPT] report={report_id}, "
+            f"glossary_source={'PROVIDER' if using_provider_glossary else 'DEFAULT (Takenos)'}, "
+            f"glossary_len={len(resolved_glossary) if resolved_glossary else len(_default_glossary)}"
+        )
+
         context_summary += """
-**Glosario de Métricas de Marketing:**
-- **Inversión**: Gasto publicitario total (USD)
-- **Install**: Número de instalaciones generadas por la campaña
-- **Apertura cuenta exitosa**: Registros completos después de instalar
-- **FTD (First Time Deposit)**: Primer depósito de usuario - métrica crítica de conversión final
-- **CPA_install**: Costo por instalación = inversión / install
-- **CPA_apertura_cuenta_exitosa**: Costo por apertura exitosa = inversión / apertura_cuenta_exitosa
-- **CPA_FTD**: Costo por primer depósito = inversión / FTD (KPI crítico)
-- **CVR_install_FTD**: Tasa de conversión = FTD / install
 
-**Funnel de Conversión:** Inversión → Install → Apertura → FTD
+**REGLA #1 — SIEMPRE MOSTRAR DATOS PRIMERO:**
+Antes de decir "no hay datos", busca qué datos del reporte SÍ son relevantes para la pregunta.
+Presenta esos datos con valores específicos (números, nombres de campañas, networks, fechas).
+Después de presentar los datos disponibles, si la pregunta pide algo más que no está en el reporte,
+di: "El reporte no contiene datos sobre [X], por lo que esa parte no se puede evaluar."
 
-**Instrucciones de Respuesta:**
-- Responde en español de manera clara, concisa y profesional
-- Usa los datos del reporte para fundamentar tus respuestas
-- Si una pregunta requiere datos no disponibles en el reporte, indícalo claramente
-- Enfócate en insights accionables y recomendaciones prácticas
-- Cuando hables de métricas, proporciona contexto y comparaciones cuando sea posible
-- Prioriza análisis de performance, eficiencia de campañas y oportunidades de optimización
-- Si el usuario pregunta por datos específicos de campañas, verifica si están en el reporte antes de responder
-- Usa términos de marketing digital apropiados al nivel de expertise del usuario
-- Sé objetivo y base tus respuestas en los datos del reporte
+**REGLA #2 — NO RELLENAR CON TEORÍA:**
+Después de presentar los datos y declarar los límites, PARA. No agregues:
+- Consejos genéricos ("diversificar canales", "pruebas A/B", "remarketing", "segmentación diferente",
+  "reconocimiento de marca", "optimizar la landing", "analizar el público").
+- Especulaciones sobre lo que "podría" pasar sin datos que lo soporten.
+- Puntos numerados que no citan datos del reporte.
+Si terminaste de analizar los datos y no hay más que decir, la respuesta termina ahí.
+
+**REGLA #3 — FORMATO:**
+- Responde en español, claro y profesional.
+- "Mejor CPA" = valor más BAJO. "Peor CPA" = valor más ALTO.
+- Una respuesta corta con datos concretos es mejor que una larga con relleno.
 """
-        
+
         return context_summary
     
+    def _build_system_prompt_mcp(self, context: Dict[str, Any]) -> str:
+        """
+        Build lightweight system prompt for MCP-enabled sessions.
+        
+        Only includes pre-loaded context (key_findings, recommendations,
+        resumen_ejecutivo). Other data is fetched on-demand via MCP tools.
+        ~50 lines vs ~200 lines of the full prompt.
+        """
+        if context is None:
+            context = {}
+
+        report_id = context.get("report_id", "unknown")
+        company = context.get("company", "Cliente")
+        config_context = context.get("config_context") or {}
+        data_window = context.get("data_window") or {}
+        key_findings = context.get("key_findings") or []
+        recommendations = context.get("recommendations") or []
+        resumen_block = context.get("resumen_ejecutivo")
+        available_blocks = context.get("available_blocks") or []
+
+        date_from = data_window.get("date_from", "N/A")
+        date_to = data_window.get("date_to", "N/A")
+        period_str = f"{date_from} a {date_to}"
+
+        prompt = f"""Eres un analista de datos de marketing digital. Tu trabajo es responder preguntas
+analizando EXCLUSIVAMENTE los datos del reporte proporcionado.
+
+Regla clave: SIEMPRE presenta primero los datos relevantes que el reporte SÍ contiene.
+Si una parte de la pregunta requiere información que no está en el reporte, presenta
+primero lo que sí puedes responder con datos, y luego indica qué parte no se puede
+responder por falta de datos.
+
+**Cliente:** {company}
+**Reporte ID:** {report_id}
+**Período analizado:** {period_str}
+"""
+
+        # Business context
+        if config_context:
+            objetivo = config_context.get("objetivoNegocio", "No especificado")
+            metrica = config_context.get("metricaExito", "No especificada")
+            prompt += f"\n**Contexto de Negocio:**\n- Objetivo: {objetivo}\n- Métrica de éxito: {metrica}\n"
+
+        # Pre-loaded key findings
+        if key_findings:
+            prompt += "\n**Hallazgos Clave del Reporte:**\n"
+            for i, finding in enumerate(key_findings[:5], 1):
+                prompt += f"{i}. {finding}\n"
+
+        # Pre-loaded recommendations
+        if recommendations:
+            prompt += "\n**Recomendaciones Principales:**\n"
+            for i, rec in enumerate(recommendations[:5], 1):
+                prompt += f"{i}. {rec}\n"
+
+        # Pre-loaded resumen_ejecutivo block
+        if resumen_block:
+            prompt += "\n**Resumen Ejecutivo (pre-cargado):**\n"
+            narrative = resumen_block.get("narrative", "")
+            if narrative:
+                prompt += f"{narrative}\n"
+            insights = resumen_block.get("insights", [])
+            if insights:
+                prompt += "Insights:\n"
+                for insight in insights[:3]:
+                    prompt += f"  - {insight}\n"
+
+        # Available blocks for tool calls
+        block_names = {
+            "resumen_ejecutivo": "Resumen Ejecutivo",
+            "resultados_generales": "Resultados Generales",
+            "analisis_por_region": "Análisis por Región",
+            "evolucion_conversiones": "Evolución de Conversiones",
+            "cvr_indices": "Índices de Conversión",
+            "proyecciones": "Proyecciones",
+            "aprendizajes": "Aprendizajes"
+        }
+        prompt += "\n**Secciones disponibles para consulta (usa las herramientas para obtener datos):**\n"
+        for bk in available_blocks:
+            display = block_names.get(bk, bk.replace("_", " ").title())
+            prompt += f"  - {display} (block_key: '{bk}')\n"
+
+        # Metrics glossary (compact, provider-specific)
+        resolved_compact = context.get("metrics_glossary_compact")
+        _default_compact = (
+            "\n**Métricas clave:**\n"
+            "- Inversión: gasto publicitario (USD)\n"
+            "- Install: instalaciones\n"
+            "- Apertura cuenta exitosa: registros completos\n"
+            "- FTD: primer depósito (KPI crítico)\n"
+            "- CPA_FTD: costo por FTD = inversión / FTD\n"
+            "- CVR_install_FTD: tasa conversión = FTD / install\n"
+            "- Funnel: Inversión → Install → Apertura → FTD"
+        )
+        using_provider = resolved_compact is not None
+        prompt += resolved_compact or _default_compact
+        logger.info(
+            f"\U0001f4d6 [SYSTEM-PROMPT-MCP] report={report_id}, "
+            f"glossary_source={'PROVIDER' if using_provider else 'DEFAULT (Takenos)'}, "
+            f"glossary_compact_len={len(resolved_compact) if resolved_compact else len(_default_compact)}"
+        )
+
+        prompt += """
+
+**REGLA #1 — SIEMPRE MOSTRAR DATOS PRIMERO:**
+Antes de decir "no hay datos", busca qué datos del reporte SÍ son relevantes para la pregunta.
+Presenta esos datos con valores específicos (números, nombres de campañas, networks, fechas).
+Después de presentar los datos disponibles, si la pregunta pide algo más que no está en el reporte,
+di: "El reporte no contiene datos sobre [X], por lo que esa parte no se puede evaluar."
+
+**REGLA #2 — NO RELLENAR CON TEORÍA:**
+Después de presentar los datos y declarar los límites, PARA. No agregues:
+- Consejos genéricos ("diversificar canales", "pruebas A/B", "remarketing", "segmentación diferente",
+  "reconocimiento de marca", "optimizar la landing", "analizar el público").
+- Especulaciones sobre lo que "podría" pasar sin datos que lo soporten.
+- Puntos numerados que no citan datos del reporte.
+Si terminaste de analizar los datos y no hay más que decir, la respuesta termina ahí.
+
+**REGLA #3 — FORMATO Y HERRAMIENTAS:**
+- Responde en español, claro y profesional.
+- SIEMPRE usa herramientas antes de responder con datos numéricos.
+- Para bloques específicos usa tool_get_report_blocks.
+- "Mejor CPA" = valor más BAJO. "Peor CPA" = valor más ALTO.
+- Una respuesta corta con datos concretos es mejor que una larga con relleno.
+
+**REGLA #4 — EFICIENCIA DE HERRAMIENTAS:**
+Cuando necesites datos de múltiples secciones, solicita TODAS las herramientas necesarias
+en una sola respuesta. No pidas una sección, esperes el resultado y luego pidas otra.
+"""
+        logger.debug(f"Built MCP system prompt for report {report_id}:\n{prompt}")
+        return prompt
+
     def _prepare_messages(
         self,
         session: MarketingChatSession,
@@ -240,8 +424,12 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
         """
         messages = []
         
-        # Add system prompt with context
-        system_prompt = self._build_system_prompt(session.context)
+        # Use MCP-specific prompt if MCP is enabled
+        if self.mcp_enabled:
+            system_prompt = self._build_system_prompt_mcp(session.context)
+        else:
+            system_prompt = self._build_system_prompt(session.context)
+        
         messages.append({
             "role": "system",
             "content": system_prompt
@@ -261,6 +449,13 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
         })
         
         return messages
+
+    def _log_token_usage(self, usage: TokenUsageStats, session: MarketingChatSession) -> None:
+        """Log token usage for cost monitoring and MCP vs direct comparison."""
+        logger.info(
+            f"\U0001f4ca [TOKEN-USAGE] session={session.session_id} report={session.report_id} | "
+            f"{usage.to_log_str()}"
+        )
     
     async def stream_response(
         self,
@@ -284,27 +479,69 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
         
         logger.info(
             f"Streaming marketing chat response for session {session.session_id}, "
-            f"report {session.report_id}, message history: {len(session.messages)} messages"
+            f"report {session.report_id}, message history: {len(session.messages)} messages, "
+            f"mcp_enabled: {self.mcp_enabled}"
         )
         
+        # MCP path: use MCPChatHost with tool-calling loop
+        if self.mcp_enabled:
+            try:
+                user_id = session.user_id
+                usage = TokenUsageStats(mode="mcp")
+                async for token in self.mcp_host.stream_with_tools(messages, user_id):
+                    if isinstance(token, dict) and token.get("__type") == "usage":
+                        usage.prompt_tokens = token.get("prompt_tokens", 0)
+                        usage.completion_tokens = token.get("completion_tokens", 0)
+                        usage.total_tokens = token.get("total_tokens", 0)
+                        usage.tool_calls_count = token.get("tool_calls_count", 0)
+                        usage.llm_calls_count = token.get("llm_calls_count", 0)
+                    else:
+                        yield token
+
+                self._log_token_usage(usage, session)
+                logger.info(f"MCP streaming completed for session {session.session_id}")
+                
+            except BoomitAPIException:
+                raise
+            except Exception as e:
+                logger.error(f"MCP streaming error: {type(e).__name__}: {e}", exc_info=True)
+                raise BoomitAPIException(
+                    message="Failed to generate AI response",
+                    status_code=500,
+                    error_code="MCP_AI_GENERATION_ERROR",
+                    details={"error": repr(e)}
+                )
+            return
+        
+        # Original path: direct OpenAI streaming (when MCP_ENABLED=false)
         try:
+            usage = TokenUsageStats(mode="direct")
+
             # Call OpenAI with streaming
             stream = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 stream=True,
-                temperature=0.7,
-                max_tokens=1500  # Slightly higher for marketing analysis
+                temperature=0.2,
+                max_tokens=1500,  # Slightly higher for marketing analysis
+                stream_options={"include_usage": True}
             )
             
             # Stream tokens
             async for chunk in stream:
+                # Capture usage from the final chunk (OpenAI sends it with stream_options)
+                if chunk.usage:
+                    usage.prompt_tokens = chunk.usage.prompt_tokens
+                    usage.completion_tokens = chunk.usage.completion_tokens
+                    usage.total_tokens = chunk.usage.total_tokens
+                    usage.llm_calls_count = 1
                 # Extract content delta
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         yield delta.content
-            
+
+            self._log_token_usage(usage, session)
             logger.info(f"Streaming completed for session {session.session_id}")
             
         except Exception as e:
@@ -349,7 +586,7 @@ Tu rol es ayudar a analizar e interpretar reportes de marketing, respondiendo pr
                 model=self.model,
                 messages=messages,
                 stream=False,
-                temperature=0.7,
+                temperature=0.2,
                 max_tokens=1500
             )
             

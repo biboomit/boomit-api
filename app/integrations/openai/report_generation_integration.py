@@ -144,7 +144,7 @@ class OpenAIReportGenerationIntegration:
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.7,
+                temperature=0.2,
                 max_completion_tokens=16384
             )
             req_id = getattr(response, "request_id", None)
