@@ -120,6 +120,8 @@ jobs:
             --from-literal=ANALYTICS_SERVICE_URL="${{ secrets.ANALYTICS_SERVICE_URL }}" \
             --from-literal=BANCOBCT_ANALYTICS_SERVICE_URL="${{ secrets.BANCOBCT_ANALYTICS_SERVICE_URL }}" \
             --from-literal=REPORT_SERVICE_URL="${{ secrets.REPORT_SERVICE_URL }}" \
+            --from-literal=MCP_ENABLED="${{ secrets.MCP_ENABLED }}" \
+            --from-literal=MCP_BIGQUERY_SERVER_URL="${{ secrets.MCP_BIGQUERY_SERVER_URL }}" \
             --namespace=default \
             --dry-run=client -o yaml | kubectl apply -f -
 

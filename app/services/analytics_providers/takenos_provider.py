@@ -227,3 +227,31 @@ class TakenosAnalyticsProvider(AnalyticsProvider):
     @property
     def analytics_explanation(self) -> str:
         return TAKENOS_EXPLANATION
+
+    @property
+    def metrics_glossary(self) -> str:
+        return (
+            "\n**Glosario de Métricas de Marketing:**\n"
+            "- **Inversión**: Gasto publicitario total (USD)\n"
+            "- **Install**: Número de instalaciones generadas por la campaña\n"
+            "- **Apertura cuenta exitosa**: Registros completos después de instalar\n"
+            "- **FTD (First Time Deposit)**: Primer depósito de usuario - métrica crítica de conversión final\n"
+            "- **CPA_install**: Costo por instalación = inversión / install\n"
+            "- **CPA_apertura_cuenta_exitosa**: Costo por apertura exitosa = inversión / apertura_cuenta_exitosa\n"
+            "- **CPA_FTD**: Costo por primer depósito = inversión / FTD (KPI crítico)\n"
+            "- **CVR_install_FTD**: Tasa de conversión = FTD / install\n"
+            "\n**Funnel de Conversión:** Inversión → Install → Apertura → FTD"
+        )
+
+    @property
+    def metrics_glossary_compact(self) -> str:
+        return (
+            "\n**Métricas clave:**\n"
+            "- Inversión: gasto publicitario (USD)\n"
+            "- Install: instalaciones\n"
+            "- Apertura cuenta exitosa: registros completos\n"
+            "- FTD: primer depósito (KPI crítico)\n"
+            "- CPA_FTD: costo por FTD = inversión / FTD\n"
+            "- CVR_install_FTD: tasa conversión = FTD / install\n"
+            "- Funnel: Inversión → Install → Apertura → FTD"
+        )
