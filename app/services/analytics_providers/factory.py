@@ -4,6 +4,7 @@ from typing import Dict, Type
 from app.services.analytics_providers.base import AnalyticsProvider
 from app.services.analytics_providers.takenos_provider import TakenosAnalyticsProvider
 from app.services.analytics_providers.banco_bct_provider import BancoBctAnalyticsProvider
+from app.services.analytics_providers.flex_bct_provider import FlexBctAnalyticsProvider
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 PROVIDERS: Dict[str, Type[AnalyticsProvider]] = {
     "takenos": TakenosAnalyticsProvider,
     "banco_bct": BancoBctAnalyticsProvider,
+    "flex_bct": FlexBctAnalyticsProvider,
 }
 
 

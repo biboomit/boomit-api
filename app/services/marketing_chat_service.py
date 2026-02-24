@@ -158,6 +158,7 @@ responder por falta de datos.
                 block_names = {
                     "resumen_ejecutivo": "Resumen Ejecutivo",
                     "resultados_generales": "Resultados Generales",
+                    "analisis_region": "Análisis por Región",
                     "analisis_por_region": "Análisis por Región",
                     "evolucion_conversiones": "Evolución de Conversiones",
                     "cvr_indices": "Índices de Conversión",
@@ -348,6 +349,7 @@ responder por falta de datos.
         block_names = {
             "resumen_ejecutivo": "Resumen Ejecutivo",
             "resultados_generales": "Resultados Generales",
+            "analisis_region": "Análisis por Región",
             "analisis_por_region": "Análisis por Región",
             "evolucion_conversiones": "Evolución de Conversiones",
             "cvr_indices": "Índices de Conversión",
