@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from typing import Optional, Any
+from datetime import datetime, date
 
 
 class ReviewSourceResponse(BaseModel):
@@ -194,6 +194,7 @@ class ReviewInternal(BaseModel):
             "updated_at": self.updated_at,
         }
 
+
 class MetricsResponse(BaseModel):
     """Response model for app metrics"""
 
@@ -218,3 +219,176 @@ class MetricsResponse(BaseModel):
                 },
             }
         }
+
+
+class AnalysisParameters(BaseModel):
+    """Parameters for AI analysis"""
+
+    from_date: Optional[date] = Field(None, description="Start date for analysis")
+    to_date: Optional[date] = Field(None, description="End date for analysis")
+    response_language: Optional[str] = Field(
+        "en", description="Language for the response"
+    )
+    min_rating: Optional[int] = Field(
+        None, ge=1, le=5, description="Minimum rating filter"
+    )
+    max_rating: Optional[int] = Field(
+        None, ge=1, le=5, description="Maximum rating filter"
+    )
+
+    @field_validator("response_language")
+    @classmethod
+    def normalize_language(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize response language to lowercase"""
+        return v.lower() if v else v
+
+    @field_validator("min_rating", "max_rating")
+    @classmethod
+    def validate_ratings(cls, v: Optional[int]) -> Optional[int]:
+        """Ensure ratings are within valid range"""
+        if v is not None and (v < 1 or v > 5):
+            raise ValueError("Ratings must be between 1 and 5")
+        return v
+
+    @field_validator("to_date")
+    @classmethod
+    def validate_date_range(cls, v: Optional[datetime], info) -> Optional[datetime]:
+        """Validate that to_date is not earlier than from_date"""
+        from_date = info.data.get("from_date")
+        if v is not None and from_date is not None and v < from_date:
+            raise ValueError("to_date cannot be earlier than from_date")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_rating_range(self) -> 'AnalysisParameters':
+        """Ensure min_rating is not greater than max_rating"""
+        if (self.min_rating is not None and 
+            self.max_rating is not None and 
+            self.min_rating > self.max_rating):
+            raise ValueError("min_rating cannot be greater than max_rating")
+        return self
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "from_date": "2024-01-01",
+                "to_date": "2024-12-31",
+                "response_language": "en",
+                "min_rating": 1,
+                "max_rating": 5,
+            }
+        }
+
+
+class AIAnalysisRequest(BaseModel):
+    """Request model for AI analysis of reviews"""
+
+
+    app_id: str = Field(..., description="App ID associated with the reviews")
+    source: str = Field(..., description="Source of the reviews (android or ios)")
+    analysis_type: str = Field(..., description="Type of AI analysis to perform")
+    parameters: Optional[AnalysisParameters] = Field(
+        None, description="Additional parameters for the AI analysis"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "app_id": "com.example.app",
+                "source": "android",
+                "analysis_type": "sentiment",
+                "parameters": {
+                    "from_date": "2024-01-01",
+                    "to_date": "2024-12-31",
+                    "response_language": "es",
+                    "min_rating": 3,
+                    "max_rating": 5,
+                },
+            }
+        }
+
+
+class AIAnalysisResponse(BaseModel):
+    """Response model for AI analysis request"""
+    batch: Any = Field(..., description="Batch information from OpenAI")
+    file_uploaded: Any = Field(..., description="File upload information from OpenAI")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "batch": {
+                    "id": "batch_123",
+                    "status": "processing"
+                },
+                "file_uploaded": {
+                    "id": "file_123",
+                    "filename": "reviews.jsonl"
+                }
+            }
+        }
+    )
+
+
+class SentimentSummary(BaseModel):
+    """Sentiment distribution summary"""
+    positive: int = Field(..., description="Percentage of positive reviews")
+    neutral: int = Field(..., description="Percentage of neutral reviews")
+    negative: int = Field(..., description="Percentage of negative reviews")
+    description: str = Field(..., description="Overall sentiment description")
+
+
+class TechnicalIssue(BaseModel):
+    """Technical issue reported in reviews"""
+    topic: str = Field(..., description="Issue topic or description")
+    percentage: int = Field(..., description="Percentage of mentions")
+
+
+class Recommendation(BaseModel):
+    """Recommendation for improvement"""
+    issue: str = Field(..., description="Identified issue")
+    solution: str = Field(..., description="Recommended solution")
+
+
+class Insight(BaseModel):
+    """Analysis insight or trend"""
+    trend: str = Field(..., description="Observed trend")
+    type: str = Field(..., description="Trend type: positive, negative, or neutral")
+
+
+class AggregatedAIAnalysisResponse(BaseModel):
+    """Response model for aggregated AI analysis results"""
+    sentimentSummary: SentimentSummary = Field(..., description="Sentiment distribution")
+    technicalIssues: list[TechnicalIssue] = Field(default_factory=list, description="Technical issues found")
+    strengths: list[str] = Field(default_factory=list, description="App strengths")
+    weaknesses: list[str] = Field(default_factory=list, description="App weaknesses")
+    recommendations: list[Recommendation] = Field(default_factory=list, description="Improvement recommendations")
+    insights: list[Insight] = Field(default_factory=list, description="Analysis insights")
+    volumeAnalyzed: int = Field(..., description="Number of reviews analyzed")
+    analyzedAt: Optional[str] = Field(None, description="Timestamp of analysis")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "sentimentSummary": {
+                    "positive": 60,
+                    "neutral": 25,
+                    "negative": 15,
+                    "description": "Mayoría de reseñas positivas (60%)"
+                },
+                "technicalIssues": [
+                    {"topic": "Problemas de rendimiento", "percentage": 35},
+                    {"topic": "Errores en login", "percentage": 25}
+                ],
+                "strengths": ["Interfaz intuitiva", "Funcionalidad completa"],
+                "weaknesses": ["Lentitud", "Bugs frecuentes"],
+                "recommendations": [
+                    {"issue": "Problemas de rendimiento", "solution": "Optimizar carga de datos"}
+                ],
+                "insights": [
+                    {"trend": "Usuarios satisfechos con diseño", "type": "positive"}
+                ],
+                "volumeAnalyzed": 150,
+                "analyzedAt": "2024-12-08T10:30:00Z"
+            }
+        }
+    )

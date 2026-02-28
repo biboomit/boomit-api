@@ -8,7 +8,10 @@ from app.schemas.reviews import (
     ReviewListResponse,
     ReviewSourceListResponse,
     PaginatedReviewsResponse,
-    MetricsResponse
+    MetricsResponse,
+    AIAnalysisRequest,
+    AIAnalysisResponse,
+    AggregatedAIAnalysisResponse,
 )
 from app.middleware.auth import get_current_user
 from app.core.exceptions import DatabaseConnectionError
@@ -96,6 +99,11 @@ async def get_reviews_by_app(
     date_to: Optional[datetime] = Query(
         None, description="Filter reviews until this date (ISO 8601 format)"
     ),
+    filter: Optional[str] = Query(
+        None, 
+        description="Filter type: must be exactly 'best' (rating >= 3) or 'worst' (rating < 3) in lowercase", 
+        regex="^(best|worst)$"
+    ),
     service: ReviewService = Depends(get_review_service),
     current_user: dict = Depends(get_current_user),
 ):
@@ -104,6 +112,7 @@ async def get_reviews_by_app(
     This endpoint returns individual reviews for a specific app with support for:
     - Rating range filtering
     - Date range filtering
+    - Special filters (best/worst)
     - Pagination
 
     Args:
@@ -114,6 +123,7 @@ async def get_reviews_by_app(
         rating_max: Maximum rating (1-5)
         date_from: Start date for filtering reviews
         date_to: End date for filtering reviews
+        filter: Special filter - 'best' (rating >= 3, ordered by rating desc) or 'worst' (rating < 3, ordered by rating asc)
         service: Review service dependency
         current_user: Authenticated user dependency
 
@@ -145,6 +155,7 @@ async def get_reviews_by_app(
             rating_max=rating_max,
             date_from=date_from,
             date_to=date_to,
+            filter=filter,
         )
 
         return PaginatedReviewsResponse(
@@ -180,7 +191,7 @@ async def get_metrics(
     current_user: dict = Depends(get_current_user),
 ):
     """Get metrics for a specific app.
-    
+
     Args:
         app_id: App ID to fetch metrics for
         date_from: Start date for metrics
@@ -194,17 +205,19 @@ async def get_metrics(
     Returns:
         MetricsResponse: The metrics for the specified app.
     """
-    
+
     if date_from is not None and date_to is not None and date_from > date_to:
         raise HTTPException(
             status_code=400, detail="date_from cannot be greater than date_to"
         )
-        
+
     try:
         metrics, time_frame, source = await service.get_metrics(
             app_id=app_id, date_from=date_from, date_to=date_to
         )
-        return MetricsResponse(app_id=app_id, metrics=metrics, time_frame=time_frame, source=source)
+        return MetricsResponse(
+            app_id=app_id, metrics=metrics, time_frame=time_frame, source=source
+        )
     except DatabaseConnectionError as e:
         error_message = str(e)
         if "not found" in error_message.lower():
@@ -215,6 +228,7 @@ async def get_metrics(
     except Exception as e:
         logger.error(f"Unexpected error in get_metrics for app {app_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/", response_model=ReviewListResponse, deprecated=True)
 async def get_reviews(
@@ -256,3 +270,91 @@ async def get_reviews(
     except Exception as e:
         logger.error(f"Error in deprecated get_reviews endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/latest-ai-analysis", response_model=dict) # TODO: define a better response model
+async def analyze_reviews_with_ai(
+    app_id: str = Query(..., description="App ID to analyze reviews for"),
+    service: ReviewService = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Analyze reviews for a specific app using AI and return the latest analysis.
+
+    Args:
+        app_id: App ID to analyze reviews for
+        service: Review service dependency
+        current_user: Authenticated user dependency
+    """
+    try:
+        analysis_result = await service.get_latest_analysis(app_id=app_id)
+        return analysis_result
+    except Exception as e:
+        logger.error(
+            f"Unexpected error in analyze_reviews_with_ai for app {app_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/ai-analysis", response_model=dict)
+async def request_ai_analysis(
+    analysis_request: AIAnalysisRequest,
+    service: ReviewService = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Request AI analysis for reviews based on the provided parameters.
+    Now triggers concurrent OpenAI analysis and bulk insert to BigQuery.
+
+    Args:
+        analysis_request (AIAnalysisRequest): Parameters for the AI analysis request. App ID and source are required.
+        service (ReviewService): Review service dependency. Defaults to Depends(get_review_service).
+        current_user (dict): Authenticated user dependency. Defaults to Depends(get_current_user).
+    """
+    try:
+        result = await service.request_ai_analysis(
+            analysis_request.app_id,
+            analysis_request.source,
+            analysis_request.parameters
+        )
+        return {"status": result}
+    except Exception as e:
+        logger.error(f"Error in request_ai_analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/ai-analysis", response_model=AggregatedAIAnalysisResponse)
+async def get_ai_analysis(
+    app_id: str = Query(..., description="App ID to get AI analysis for"),
+    date_from: Optional[datetime] = Query(
+        None, description="Start date for analysis filtering (ISO 8601 format)"
+    ),
+    date_to: Optional[datetime] = Query(
+        None, description="End date for analysis filtering (ISO 8601 format)"
+    ),
+    service: ReviewService = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get the analysis for a specific app performed by AI.
+
+    Args:
+        app_id: App ID to get AI analysis for
+        date_from: Optional start date for filtering analysis results
+        date_to: Optional end date for filtering analysis results
+        service: Review service dependency
+        current_user: Authenticated user dependency
+    """
+    # Validate date range
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(
+            status_code=400, detail="date_from cannot be greater than date_to"
+        )
+
+    try:
+        analysis_result = await service.get_ai_analysis(app_id=app_id, date_from=date_from, date_to=date_to)
+        return analysis_result
+    except Exception as e:
+        logger.error(
+            f"Unexpected error in get_ai_analysis for app {app_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")

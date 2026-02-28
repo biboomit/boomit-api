@@ -1,0 +1,26 @@
+{
+	"block_key": "CVR e índices",
+	"purpose": "Métricas detalladas de conversión",
+	"max_charts": 2,
+	"allowed_chart_types": ["bar", "line"],
+	"chart_contracts": [
+		{
+			"chart_slot": 1,
+			"business_question": "¿Cuál es el CVR por canal o región?",
+			"recommended_encoding": {
+				"x": "channel",
+				"y": "cvr"
+			},
+			"preferred_chart": "bar"
+		},
+		{
+			"chart_slot": 2,
+			"business_question": "¿Cómo evoluciona el CVR en el tiempo?",
+			"recommended_encoding": {
+				"x": "date",
+				"y": "cvr"
+			},
+			"preferred_chart": "line"
+		}
+	]
+}
