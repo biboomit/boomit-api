@@ -29,15 +29,12 @@ class CompanyService:
             fecha_creacion,
             fecha_actualizacion
         FROM `{self.table_id}`
-        ORDER BY fecha_creacion DESC
-        LIMIT @limit
-        OFFSET @skip
+        ORDER BY fecha_creacion DESC, empresa_id ASC
+        LIMIT {int(limit)}
+        OFFSET {int(skip)}
         """
 
-        query_params = [
-            bigquery.ScalarQueryParameter("limit", "INT64", limit),
-            bigquery.ScalarQueryParameter("skip", "INT64", skip)
-        ]
+        query_params = []
 
         count_query = f"SELECT COUNT(*) as total FROM `{self.table_id}`"
 

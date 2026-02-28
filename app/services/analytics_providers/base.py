@@ -126,6 +126,8 @@ class AnalyticsProvider(ABC):
         logger.info(f"[{cls_name}] Calling microservice: {final_url}")
 
         headers = self._get_auth_headers()
+        # log the final url and headers (without sensitive info)
+        logger.debug(f"[{cls_name}] Request headers: {headers}")
         response = requests.get(final_url, headers=headers)
 
         if response.status_code != 200:
