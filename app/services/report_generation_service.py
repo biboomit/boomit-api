@@ -33,7 +33,8 @@ class ReportGenerationService:
             raise ValueError("El agente no tiene configurado un company name en la configuración del reporte.")
         formatted_provider_name = provider_name.lower().replace(" ", "_")
         analytics_provider = get_analytics_provider(formatted_provider_name)
-
+        # log the analytics provider being used
+        logger.info(f"🔍 [SERVICE] generate_report: Using analytics provider '{formatted_provider_name}' for company '{provider_name}'")
         # 3. Consultar datos analíticos via el proveedor (data + data_window + explicación)
         analytics_data, data_window, analytics_explanation = analytics_provider.get_analytics(
             date_from=date_from, date_to=date_to, top_n=top_n
@@ -61,6 +62,9 @@ class ReportGenerationService:
             logger.error(f"[OPENAI ERROR] El resultado de OpenAI no es un dict: {type(report_json)}: {str(report_json)[:1000]}")
             raise RuntimeError(f"El resultado de OpenAI no es un dict: {type(report_json)}: {str(report_json)[:1000]}")
 
+        # 5b. Re-ordenar bloques según el orden de selected_blocks (el LLM no garantiza orden)
+        report_json = self._reorder_blocks(report_json, agent_config)
+
         # 6. Guardar el reporte generado y retornar el ID
         report_id = self._save_report(agent_id, user_id, report_json, date_from, date_to)
 
@@ -69,6 +73,61 @@ class ReportGenerationService:
             "message": f"Successfully generated report structure for agent_id: {agent_id}, user_id: {user_id}",
             "report_id": report_id,
         }
+
+    def _reorder_blocks(self, report_json: dict, agent_config: dict) -> dict:
+        """
+        Re-ordena los bloques del reporte según el orden definido en selected_blocks
+        de la configuración del agente. Bloques no listados en selected_blocks se
+        agregan al final en el orden en que aparecieron en la respuesta del LLM.
+        """
+        selected_blocks_raw = agent_config.get("selected_blocks", [])
+        if isinstance(selected_blocks_raw, str):
+            try:
+                selected_blocks_raw = json.loads(selected_blocks_raw)
+            except (json.JSONDecodeError, TypeError):
+                selected_blocks_raw = []
+        if not selected_blocks_raw or not isinstance(selected_blocks_raw, list):
+            logger.info("🔀 [SERVICE] _reorder_blocks: no selected_blocks to reorder by, keeping LLM order")
+            return report_json
+
+        blocks = report_json.get("blocks", [])
+        if not blocks:
+            return report_json
+
+        # Normalizar: crear mapa de block_key -> posición deseada
+        # Soportar tanto guiones_bajos como guiones-medios
+        order_map = {}  # normalized_key -> position
+        for idx, key in enumerate(selected_blocks_raw):
+            order_map[key] = idx
+            order_map[key.replace("-", "_")] = idx
+            order_map[key.replace("_", "-")] = idx
+
+        # Crear índice de bloques por block_key
+        blocks_by_key = {}
+        for block in blocks:
+            bk = block.get("block_key", "") if isinstance(block, dict) else getattr(block, "block_key", "")
+            blocks_by_key[bk] = block
+
+        # Ordenar: primero los que están en selected_blocks (en orden), luego el resto
+        ordered = []
+        seen_keys = set()
+        for key in selected_blocks_raw:
+            # Buscar el bloque con este key o su variante normalizada
+            block = blocks_by_key.get(key) or blocks_by_key.get(key.replace("-", "_")) or blocks_by_key.get(key.replace("_", "-"))
+            if block:
+                ordered.append(block)
+                bk = block.get("block_key", "") if isinstance(block, dict) else getattr(block, "block_key", "")
+                seen_keys.add(bk)
+
+        # Agregar bloques extra que el LLM haya generado pero no estén en selected_blocks
+        for block in blocks:
+            bk = block.get("block_key", "") if isinstance(block, dict) else getattr(block, "block_key", "")
+            if bk not in seen_keys:
+                ordered.append(block)
+
+        logger.info(f"🔀 [SERVICE] _reorder_blocks: reordered {len(ordered)} blocks. Order: {[b.get('block_key') if isinstance(b, dict) else getattr(b, 'block_key', '?') for b in ordered]}")
+        report_json["blocks"] = ordered
+        return report_json
 
     def _get_agent_config(self, agent_id, user_id):
         logger.info(f"🔍 [SERVICE] _get_agent_config IN: agent_id={agent_id}, user_id={user_id}")
