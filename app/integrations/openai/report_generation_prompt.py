@@ -95,5 +95,6 @@ REPORT_GENERATION_PROMPT = '''
   - No incluyas JavaScript ni HTML; usa Vega-Lite v5.
   - Si un bloque no admite gráficos, deja `charts` vacío.
   - `block_key` debe coincidir EXACTO con `blocks_config`/`selected_blocks` en `report_config` (snake_case).
-  - Genera todos los bloques listados, en el mismo orden; si añades nuevos que aporte valor, sigue snake_case.
+  - ORDEN OBLIGATORIO: Genera los bloques en el MISMO ORDEN EXACTO en que aparecen en el array `selected_blocks` de `report_config`. El primer elemento del array debe ser el primer bloque, el segundo elemento el segundo bloque, etc. No alteres este orden bajo ninguna circunstancia.
+  - Si añades bloques nuevos que aporten valor, colócalos AL FINAL después de todos los de selected_blocks, y usa snake_case.
   '''.strip()

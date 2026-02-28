@@ -5,6 +5,9 @@ from app.services.analytics_providers.base import AnalyticsProvider
 from app.services.analytics_providers.takenos_provider import TakenosAnalyticsProvider
 from app.services.analytics_providers.banco_bct_provider import BancoBctAnalyticsProvider
 from app.services.analytics_providers.flex_bct_provider import FlexBctAnalyticsProvider
+from app.services.analytics_providers.monific_provider import MonificAnalyticsProvider
+from app.services.analytics_providers.dlocal_provider import DlocalAnalyticsProvider
+from app.services.analytics_providers.the_yard_provider import TheYardAnalyticsProvider
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,9 @@ PROVIDERS: Dict[str, Type[AnalyticsProvider]] = {
     "takenos": TakenosAnalyticsProvider,
     "banco_bct": BancoBctAnalyticsProvider,
     "flex_bct": FlexBctAnalyticsProvider,
+    "monific": MonificAnalyticsProvider,
+    "dlocal": DlocalAnalyticsProvider,
+    "the_yard": TheYardAnalyticsProvider,
 }
 
 
