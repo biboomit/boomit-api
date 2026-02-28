@@ -6,8 +6,8 @@ from app.services.analytics_providers.base import AnalyticsProvider
 DLOCAL_EXPLANATION = """
 FORMATO DE analytics_data:
 - dataset: uno de ["totales_globales_periodo", "totales_por_pais", "totales_por_estrategia",
-  "serie_diaria_agregada", "serie_diaria_por_pais", "serie_diaria_por_estrategia",
-  "funnel_por_pais", "funnel_por_estrategia", "top_campanas_mes", "serie_diaria_top"].
+  "serie_diaria_agregada", "funnel_por_pais", "funnel_por_estrategia",
+  "top_campanas_mes", "serie_diaria_top"].
 
   * totales_globales_periodo: 1 fila con métricas agregadas del rango completo, incluye presupuesto,
     pacing, daily_spend_rate y spend_remaining.
@@ -17,8 +17,6 @@ FORMATO DE analytics_data:
     Ordenado por contact_sales_submission DESC.
   * serie_diaria_agregada: filas con métricas diarias TOTALES (todos los países/estrategias sumados)
     por fecha. CPAs y CVRs pre-calculados.
-  * serie_diaria_por_pais: filas con métricas diarias desglosadas por país y fecha. SIN CPAs.
-  * serie_diaria_por_estrategia: filas con métricas diarias desglosadas por estrategia y fecha. SIN CPAs.
   * funnel_por_pais: filas con las 3 etapas del funnel por país (etapa_1_usuarios_totales,
     etapa_2_users_click_contact_sales, etapa_3_contact_sales_submission) y CVRs.
   * funnel_por_estrategia: igual que funnel_por_pais pero agrupado por estrategia.
@@ -34,8 +32,6 @@ FORMATO DE analytics_data:
   * totales_por_pais: incluye "pais", sesiones, users_click_contact_sales_sub.
   * totales_por_estrategia: incluye "estrategia", sesiones, users_click_contact_sales_sub.
   * serie_diaria_agregada: incluye "fecha" (DATE). CPAs y CVRs ya pre-calculados por día.
-  * serie_diaria_por_pais: incluye "fecha" (DATE), "pais". SIN CPAs pre-calculados.
-  * serie_diaria_por_estrategia: incluye "fecha" (DATE), "estrategia". SIN CPAs pre-calculados.
   * funnel_por_pais: incluye "pais", etapa_1_usuarios_totales, etapa_2_users_click_contact_sales,
     etapa_3_contact_sales_submission, cvr_users_click, cvr_click_submission.
   * funnel_por_estrategia: incluye "estrategia", mismas etapas y CVRs que funnel_por_pais.
@@ -48,7 +44,8 @@ FORMATO DE analytics_data:
   Países normalizados: United Kingdom, United States, Spain, Japan, Germany, Others.
 - NOTA SEMÁNTICA CPA: "Mejor CPA" = valor MÁS BAJO. "Peor CPA" = valor MÁS ALTO. NUNCA invertir.
 - Los KPIs (CPA/CVR) serán NULL si el denominador es 0; NO los trates como 0.
-- Filtrado previo: excluye network en ('Organic', 'Others'). Requiere al menos una señal
+- Filtrado previo: excluye network en ('Organic', 'Others'). Solo incluye estrategias: 'Others', 'Payins', 'Payouts'.
+  Requiere al menos una señal
   (inversion > 0 OR usuarios_totales > 0 OR contact_sales_submission > 0).
 
 DICCIONARIO DE DATOS:
@@ -56,7 +53,7 @@ DICCIONARIO DE DATOS:
 - nombre_campana: nombre de la campaña publicitaria.
 - pais: país normalizado de la campaña (United Kingdom, United States, Spain, Japan, Germany, Others).
 - network: plataforma publicitaria (Google Ads, LinkedIn Ads, Bing Ads, etc.).
-- estrategia: clasificación estratégica interna de la campaña.
+- estrategia: clasificación estratégica interna de la campaña (filtrado a: Others, Payins, Payouts).
 - flag_payin_payout: indicador Payin/Payout/Handbook (columna informativa en top_campanas_mes).
 - inversion: gasto publicitario total (costo_gads + costo_linkedin + costo_bing).
 - costo_gads: inversión en Google Ads.
@@ -261,8 +258,8 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     Primary segmentation: pais (country) and estrategia (strategy)
     Networks: Google Ads, LinkedIn Ads, Bing Ads
     Datasets: totales_globales_periodo, totales_por_pais, totales_por_estrategia,
-              serie_diaria_agregada, serie_diaria_por_pais, serie_diaria_por_estrategia,
-              funnel_por_pais, funnel_por_estrategia, top_campanas_mes, serie_diaria_top
+              serie_diaria_agregada, funnel_por_pais, funnel_por_estrategia,
+              top_campanas_mes, serie_diaria_top
     """
 
     @property

@@ -6,13 +6,12 @@ from app.services.analytics_providers.base import AnalyticsProvider
 MONIFIC_EXPLANATION = """
 FORMATO DE analytics_data:
 - dataset: uno de ["totales_globales_periodo", "totales_por_os", "serie_diaria_agregada",
-  "serie_diaria_por_os", "funnel_por_os", "funnel_por_network", "totales_por_network",
+  "funnel_por_os", "funnel_por_network", "totales_por_network",
   "serie_diaria_por_network", "top_campanas_mes", "serie_diaria_top"].
 
   * totales_globales_periodo: 1 fila con métricas agregadas del rango completo, incluye presupuesto y pacing.
   * totales_por_os: filas con totales por sistema operativo (os: Android, iOS, Web). KPIs pre-calculados.
   * serie_diaria_agregada: filas con métricas diarias TOTALES (sumadas, todos los OS) por fecha, CON CPAs y CVRs pre-calculados.
-  * serie_diaria_por_os: filas con métricas diarias desglosadas por OS y fecha, SIN CPAs pre-calculados.
   * funnel_por_os: filas con las 3 etapas del funnel por OS (etapa_2_registro_simple, etapa_3_llenado_contrato, etapa_4_inversion_exitosa) y CVRs.
   * funnel_por_network: igual que funnel_por_os pero agrupado por network.
   * totales_por_network: filas con totales por plataforma publicitaria (network), KPIs pre-calculados.
@@ -28,7 +27,6 @@ FORMATO DE analytics_data:
   * totales_por_os: incluye os, tracker_installs, impresiones, clicks, instalaciones, cvr_install_registro.
   * serie_diaria_agregada: incluye "fecha" (DATE), cpa_registro, cpa_llenado, cpa_inversion_exitosa,
     cvr_registro_llenado, cvr_llenado_inversion. Ya está agregado por fecha (todos los OS sumados).
-  * serie_diaria_por_os: incluye "fecha" (DATE), "os". NO tiene CPAs pre-calculados.
   * funnel_por_os: incluye "os", etapa_2_registro_simple, etapa_3_llenado_contrato, etapa_4_inversion_exitosa,
     cvr_install_registro, cvr_registro_llenado, cvr_llenado_inversion.
   * funnel_por_network: incluye "network", etapa_2_registro_simple, etapa_3_llenado_contrato,
@@ -243,7 +241,7 @@ class MonificAnalyticsProvider(AnalyticsProvider):
     Funnel: tracker_installs → Registro Simple → Llenado de Contrato → Inversión Exitosa
     Primary segmentation: OS (Android, iOS, Web)
     Datasets: totales_globales_periodo, totales_por_os, serie_diaria_agregada,
-              serie_diaria_por_os, funnel_por_os, funnel_por_network,
+              funnel_por_os, funnel_por_network,
               totales_por_network, serie_diaria_por_network,
               top_campanas_mes, serie_diaria_top
     """
