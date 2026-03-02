@@ -25,7 +25,6 @@ FORMATO DE analytics_data:
 - Campos específicos por dataset:
   * totales_globales_periodo: incluye presupuesto, pacing_porcentaje, daily_spend_rate, spend_remaining,
     costo_gads, costo_linkedin, costo_bing, sesiones.
-  * totales_por_pais: incluye "pais", sesiones, users_click_contact_sales_sub.
   * serie_diaria_agregada: incluye "fecha" (DATE). CPAs y CVRs ya pre-calculados por día.
   * funnel_por_etapa: incluye "etapa" (nombre de la etapa), "orden" (1, 2 o 3),
     "valor" (volumen de esa etapa), "cvr_desde_anterior" (tasa de conversión desde la etapa previa, NULL para etapa 1).
@@ -168,7 +167,7 @@ INSIGHTS OBLIGATORIOS:
   - Identificar día con MEJOR CPA_submission (valor más bajo en serie_diaria_agregada)
   - Identificar día con PEOR CPA_submission (valor más alto en serie_diaria_agregada)
   - ADVERTENCIA: Días con muy pocas submissions (ej: 1-2) tendrán CPA extremo. Mencionarlo.
-  - Comparar inversión por plataforma (Google Ads vs LinkedIn vs Bing) usando totales_globales_periodo
+  - Comparar inversión por plataforma (Google Ads vs Meta vs TikTok Ads) usando totales_globales_periodo
 
 BLOQUE: proyecciones
 ---------------------
@@ -269,7 +268,7 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     def metrics_glossary(self) -> str:
         return (
             "\n**Glosario de Métricas de Marketing:**\n"
-            "- **Inversión**: Gasto publicitario total (Google Ads + LinkedIn Ads + Bing Ads)\n"
+            "- **Inversión**: Gasto publicitario total (Google Ads + Meta + TikTok Ads)\n"
             "- **Presupuesto**: Presupuesto máximo asignado para el período\n"
             "- **Pacing**: Porcentaje de ejecución del presupuesto = inversión / presupuesto\n"
             "- **Daily Spend Rate**: Ritmo de gasto diario = inversión / días del período\n"
@@ -290,7 +289,7 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     def metrics_glossary_compact(self) -> str:
         return (
             "\n**Métricas clave:**\n"
-            "- Inversión: gasto total (Google Ads + LinkedIn + Bing)\n"
+            "- Inversión: gasto total (Google Ads + Meta + TikTok Ads)\n"
             "- Presupuesto / Pacing: presupuesto asignado y % de ejecución\n"
             "- Daily Spend Rate: ritmo de gasto diario\n"
             "- Spend Remaining: presupuesto no ejecutado\n"
