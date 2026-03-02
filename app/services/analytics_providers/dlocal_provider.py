@@ -6,15 +6,16 @@ from app.services.analytics_providers.base import AnalyticsProvider
 DLOCAL_EXPLANATION = """
 FORMATO DE analytics_data:
 - dataset: uno de ["totales_globales_periodo",
-  "serie_diaria_agregada", "funnel_por_estrategia",
+  "serie_diaria_agregada", "funnel_por_etapa",
   "top_campanas_mes", "serie_diaria_top"].
 
   * totales_globales_periodo: 1 fila con métricas agregadas del rango completo, incluye presupuesto,
     pacing, daily_spend_rate y spend_remaining.
-  * serie_diaria_agregada: filas con métricas diarias TOTALES (todos las estrategias sumadas)
+  * serie_diaria_agregada: filas con métricas diarias TOTALES (todos los networks sumados)
     por fecha. CPAs y CVRs pre-calculados.
-  * funnel_por_estrategia: filas con las 3 etapas del funnel por estrategia (etapa_1_usuarios_totales,
-    etapa_2_users_click_contact_sales, etapa_3_contact_sales_submission) y CVRs.
+  * funnel_por_etapa: 3 filas, una por cada etapa del funnel (Usuarios Totales, Users Click Contact
+    Sales, Contact Sales Submission). Campos: etapa, orden, valor, cvr_desde_anterior.
+    Ordenado por orden (1→2→3). cvr_desde_anterior es NULL para la etapa 1.
   * top_campanas_mes: hasta top_n campañas rankeadas por contact_sales_submission (luego inversión).
     Incluye nombre_campana, pais, network, estrategia, flag_payin_payout (informativo), y KPIs.
   * serie_diaria_top: serie diaria solo de las top_n campañas con CPAs y CVRs pre-calculados.
@@ -25,19 +26,19 @@ FORMATO DE analytics_data:
   * totales_globales_periodo: incluye presupuesto, pacing_porcentaje, daily_spend_rate, spend_remaining,
     costo_gads, costo_linkedin, costo_bing, sesiones.
   * serie_diaria_agregada: incluye "fecha" (DATE). CPAs y CVRs ya pre-calculados por día.
-  * funnel_por_estrategia: incluye "estrategia", etapa_1_usuarios_totales, etapa_2_users_click_contact_sales,
-    etapa_3_contact_sales_submission, cvr_users_click, cvr_click_submission.
+  * funnel_por_etapa: incluye "etapa" (nombre de la etapa), "orden" (1, 2 o 3),
+    "valor" (volumen de esa etapa), "cvr_desde_anterior" (tasa de conversión desde la etapa previa, NULL para etapa 1).
   * top_campanas_mes: incluye nombre_campana, pais, network, estrategia, flag_payin_payout,
     cpa_click_contact_sales, cpa_submission, cvr_users_click, cvr_click_submission.
   * serie_diaria_top: incluye "fecha" (DATE), nombre_campana, pais, network, estrategia,
     cpa_click_contact_sales, cpa_submission, cvr_users_click, cvr_click_submission.
 
-- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "estrategia" (Payins vs Payouts).
-  FILTRO GEOGRÁFICO FIJO: Todos los datos corresponden EXCLUSIVAMENTE a United States.
-  No hay desglose por país — la dimensión geográfica está pre-filtrada.
+- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "network" (Google Ads, Meta, TikTok Ads).
+  FILTROS FIJOS: estrategia = 'Others', flag_payin_payout = 'Others', pais = 'United States'.
+  Estas 3 dimensiones están pre-filtradas a un único valor cada una — no hay desglose por ellas.
 - NOTA SEMÁNTICA CPA: "Mejor CPA" = valor MÁS BAJO. "Peor CPA" = valor MÁS ALTO. NUNCA invertir.
 - Los KPIs (CPA/CVR) serán NULL si el denominador es 0; NO los trates como 0.
-- Filtrado previo: network filtrado a ('Google Ads', 'Meta', 'TikTok Ads'). Solo incluye estrategias: 'Payins', 'Payouts'.
+- Filtrado previo: network filtrado a ('Google Ads', 'Meta', 'TikTok Ads'). estrategia filtrado a 'Others' (valor único fijo).
   flag_payin_payout filtrado a 'Others'. Solo incluye datos de United States (filtro geográfico fijo).
   Requiere al menos una señal
   (inversion > 0 OR usuarios_totales > 0 OR contact_sales_submission > 0).
@@ -47,7 +48,7 @@ DICCIONARIO DE DATOS:
 - nombre_campana: nombre de la campaña publicitaria.
 - pais: país de la campaña (FILTRADO FIJO a United States — todos los registros son de US).
 - network: plataforma publicitaria (Google Ads, Meta, TikTok Ads). Filtrado a estos 3 valores.
-- estrategia: clasificación estratégica interna de la campaña (filtrado a: Payins, Payouts).
+- estrategia: clasificación estratégica interna de la campaña (FILTRADO FIJO a 'Others' — todos los registros tienen este valor).
 - flag_payin_payout: indicador Payin/Payout/Handbook (FILTRADO FIJO a 'Others' — todos los registros tienen este valor).
 - inversion: gasto publicitario total (costo_gads + costo_linkedin + costo_bing).
 - costo_gads: inversión en Google Ads.
@@ -77,49 +78,48 @@ Cada bloque problemático DEBE incluir los gráficos especificados a continuaci�
 
 BLOQUE: analisis_region
 -----------------------
-OBJETIVO: Mostrar performance por estrategia — dimensión principal de segmentación en Dlocal US
-NOTA: Todos los datos son de United States (filtro fijo). No hay desglose geográfico multi-país.
-DATASET A USAR: funnel_por_estrategia (YA viene pre-agregado por estrategia, NO necesitas agrupar)
+OBJETIVO: Mostrar performance por network — dimensión principal de segmentación en Dlocal US
+NOTA: Todos los datos son de United States, estrategia='Others' (filtros fijos). El desglose relevante es por network.
+DATASET A USAR: top_campanas_mes (agrupar por network para obtener métricas por plataforma)
 
 GRÁFICOS OBLIGATORIOS (elegir 2):
-  1) BAR_RANKING de contact_sales_submission por estrategia
-     - Dataset: funnel_por_estrategia (usar campo etapa_3_contact_sales_submission por estrategia)
-     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[submissions por estrategia]
-  2) DONUT_SHARE de usuarios totales por estrategia
-     - Dataset: funnel_por_estrategia (usar campo etapa_1_usuarios_totales)
-     - Highcharts: type="pie", innerSize="50%", series.data=[{name: estrategia, y: usuarios}]
+  1) BAR_RANKING de contact_sales_submission por network
+     - Dataset: top_campanas_mes (agrupar por network, sumar contact_sales_submission)
+     - Highcharts: type="bar", xAxis.categories=[networks], series.data=[submissions por network]
+  2) DONUT_SHARE de inversión por network
+     - Dataset: top_campanas_mes (agrupar por network, sumar inversion)
+     - Highcharts: type="pie", innerSize="50%", series.data=[{name: network, y: inversión}]
 
 INSIGHTS OBLIGATORIOS:
-  - Comparar Payins vs Payouts en volumen de submissions y en CVR (cvr_click_submission)
-  - Identificar qué estrategia tiene mejor tasa de conversión del funnel completo
-  - Calcular % de participación de cada estrategia en el total de submissions
-  - Mencionar que los datos corresponden exclusivamente a United States
+  - Comparar Google Ads vs Meta vs TikTok Ads en volumen de submissions e inversión
+  - Identificar qué network tiene mejor CPA (menor cpa_submission)
+  - Calcular % de participación de cada network en el total de submissions
+  - Mencionar que los datos corresponden exclusivamente a United States, estrategia='Others'
 
 BLOQUE: cvr_indices
 --------------------
-OBJETIVO: Visualizar tasas de conversión del funnel por país y estrategia
+OBJETIVO: Visualizar tasas de conversión del funnel por etapa
 DATASETS A USAR:
-  - funnel_por_estrategia (para FUNNEL_CHART y desglose de CVR por estrategia)
+  - funnel_por_etapa (3 filas: una por etapa del funnel, con volumen y CVR desde etapa anterior)
   - totales_globales_periodo (para CVRs globales del período)
 
 GRÁFICOS OBLIGATORIOS (2 gráficos):
   1) FUNNEL_CHART mostrando: Usuarios Totales → Click Contact Sales → Contact Sales Submission
-     - Dataset: totales_globales_periodo (usar campos usuarios_totales, users_click_contact_sales,
-       contact_sales_submission)
+     - Dataset: funnel_por_etapa (usar directamente: data = filas ordenadas por "orden",
+       format: [[etapa, valor], [etapa, valor], [etapa, valor]])
      - Highcharts: type="funnel", data format: [["Usuarios Totales", valor],
        ["Click Contact Sales", valor], ["Contact Sales Submission", valor]]
      - IMPORTANTE: Formato de data DEBE ser array de arrays, NO objetos con name
      - Incluir plotOptions básicas: dataLabels enabled, center, neckWidth, neckHeight
-  2) BAR_CHART de cvr_click_submission por estrategia (etapa más restrictiva del funnel)
-     - Dataset: funnel_por_estrategia (usar campo cvr_click_submission por estrategia)
-     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[cvr_click_submission]
+  2) BAR_CHART de cvr_desde_anterior por etapa (tasa de conversión de cada transición)
+     - Dataset: funnel_por_etapa (usar filas con orden 2 y 3, que tienen cvr_desde_anterior)
+     - Highcharts: type="bar", xAxis.categories=[etapa 2, etapa 3], series.data=[cvr_desde_anterior]
 
 INSIGHTS OBLIGATORIOS:
-  - Identificar la etapa del funnel con mayor caída usando cvr_users_click y cvr_click_submission
-    de totales_globales_periodo
+  - Identificar la transición del funnel con mayor caída usando cvr_desde_anterior
   - Mencionar: "De cada 100 usuarios, X hacen clic en Contact Sales y solo Y envían la solicitud"
-  - Comparar CVR entre estrategias usando funnel_por_estrategia
-  - Calcular % de caída en cada etapa: (1 - CVR) * 100
+  - Calcular % de caída en cada transición: (1 - cvr_desde_anterior) * 100
+  - Usar los valores directamente de funnel_por_etapa (ya pre-calculados)
 
 BLOQUE: evolucion_conversiones
 -------------------------------
@@ -217,25 +217,24 @@ INSIGHTS OBLIGATORIOS:
   - Mencionar campaña más exitosa (nombre + contact_sales_submission + cpa_submission + pais)
   - Mencionar campaña menos eficiente (alto cpa_submission, pocas submissions)
   - Resumen ejecutivo: "Inversión total $X generó Y submissions a un CPA de $Z"
-  - Desglosar por estrategia (cuál estrategia generó más submissions)
+  - Desglosar por network (cuál network generó más submissions)
 
 BLOQUE: aprendizajes
 ---------------------
-OBJETIVO: Comparar performance entre países, estrategias y plataformas (network)
+OBJETIVO: Comparar performance entre plataformas (network)
 GRÁFICOS SUGERIDOS (1-2):
-  1) BAR_RANKING de cpa_submission por estrategia
-     - Dataset: funnel_por_estrategia (usar campo cvr_click_submission por estrategia)
-     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[cvr_click_submission]
-  2) COLUMN_CHART de contact_sales_submission por pais y estrategia
-     - Dataset: top_campanas_mes (agrupar por pais o estrategia, sumar contact_sales_submission)
+  1) BAR_RANKING de cpa_submission por network
+     - Dataset: top_campanas_mes (agrupar por network, calcular CPA ponderado)
+     - Highcharts: type="bar", xAxis.categories=[networks], series.data=[cpa_submission]
+  2) COLUMN_CHART de contact_sales_submission por network
+     - Dataset: top_campanas_mes (agrupar por network, sumar contact_sales_submission)
      - Highcharts: type="column"
 INSIGHTS OBLIGATORIOS:
-  - Comparar estrategias en términos de CVR y volumen de submissions (usar funnel_por_estrategia)
-  - Identificar combinación estrategia + network más eficiente usando top_campanas_mes
-  - Comparar plataformas (Google Ads vs Meta vs TikTok Ads) usando costo_gads/linkedin/bing
-    de totales_globales_periodo y relacionar con el network de top_campanas_mes
-  - Recomendar ajuste de budget hacia estrategia/plataforma con mejor CPA
-  - Recordar que todos los datos son de United States (no comparar países)
+  - Comparar networks (Google Ads vs Meta vs TikTok Ads) en eficiencia (CPA) y volumen de submissions
+  - Identificar network más eficiente usando top_campanas_mes
+  - Comparar plataformas usando costo_gads/linkedin/bing de totales_globales_periodo
+  - Recomendar ajuste de budget hacia network con mejor CPA
+  - Recordar que todos los datos son de United States, estrategia='Others' (filtros fijos)
 """.strip()
 
 
@@ -246,10 +245,11 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     Microservice: dlocal-dashboard-data
     Funnel: Usuarios Totales → Users Click Contact Sales → Contact Sales Submission
     Geographic filter: United States only (pre-filtered)
-    Primary segmentation: estrategia (Payins / Payouts)
+    Primary segmentation: network (Google Ads, Meta, TikTok Ads)
+    Fixed filters: estrategia='Others', flag_payin_payout='Others', pais='United States'
     Networks: Google Ads, Meta, TikTok Ads
     Datasets: totales_globales_periodo,
-              serie_diaria_agregada, funnel_por_estrategia,
+              serie_diaria_agregada, funnel_por_etapa,
               top_campanas_mes, serie_diaria_top
     """
 
@@ -281,7 +281,7 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
             "- **CVR_users_click**: Tasa conversión usuarios → clic = users_click_contact_sales / usuarios_totales\n"
             "- **CVR_click_submission**: Tasa conversión clic → submission = submission / users_click_contact_sales\n"
             "- **País**: Filtro fijo a United States (no hay desglose multi-país)\n"
-            "- **Estrategia**: Clasificación estratégica interna (Payins, Payouts)\n"
+            "- **Estrategia**: Filtro fijo a 'Others' (no hay desglose multi-estrategia)\n"
             "\n**Funnel de Conversión:** Inversión → Usuarios Totales → Click Contact Sales → Contact Sales Submission"
         )
 
@@ -298,6 +298,6 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
             "- Contact Sales Submission: formularios enviados (KPI FINAL)\n"
             "- CPA_submission: costo por submission = inversión / submission\n"
             "- CVR_click_submission: tasa clic → submission (etapa más restrictiva)\n"
-            "- Segmentación: estrategia (Payins / Payouts), país fijo: United States\n"
+            "- Segmentación: network (Google Ads / Meta / TikTok Ads), país fijo: US, estrategia fija: Others\n"
             "- Funnel: Inversión → Usuarios Totales → Click Contact Sales → Contact Sales Submission"
         )

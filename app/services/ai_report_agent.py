@@ -21,8 +21,8 @@ class AIReportAgentService:
         return list(result)[0]["count"]
 
     def create_agent(self, agent: AIReportAgentCreate, user_id: str) -> AIReportAgentInDB:
-        if self.count_user_agents(user_id) >= 5:
-            raise ValueError("Máximo 5 agentes por usuario")
+        if self.count_user_agents(user_id) >= 20:
+            raise ValueError("Máximo 20 agentes por usuario")
         now = datetime.utcnow()
         row = {
             "id": agent.id,
@@ -50,7 +50,7 @@ class AIReportAgentService:
         return AIReportAgentInDB(**response_row)
 
     def list_agents(self, user_id: str) -> List[AIReportAgentInDB]:
-        query = f"SELECT * FROM `{self.table}` WHERE user_id = @user_id ORDER BY created_at DESC LIMIT 5"
+        query = f"SELECT * FROM `{self.table}` WHERE user_id = @user_id ORDER BY created_at DESC LIMIT 20"
         job_config = bigquery.QueryJobConfig(
             query_parameters=[bigquery.ScalarQueryParameter("user_id", "STRING", user_id)]
         )
