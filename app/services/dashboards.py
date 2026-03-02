@@ -1,7 +1,7 @@
 from typing import List, Optional
 from google.cloud import bigquery
 from app.core.exceptions import DatabaseConnectionError
-from app.schemas.dashboards import DashboardResponse, DashboardInternal
+from app.schemas.dashboards import DashboardResponse, DashboardInternal, DashboardUpdateRequest
 from datetime import datetime
 from app.core.config import bigquery_config
 
@@ -98,6 +98,42 @@ class DashboardService:
             return dashboards, total_count
         except Exception as e:
             raise DatabaseConnectionError(details={"Dashboard service error": str(e)})
+
+    async def update_dashboard(self, producto_id: str, payload: DashboardUpdateRequest) -> int:
+        """Actualizar url y/o url_embebido de un dashboard por producto_id"""
+        if payload.url is None and payload.url_embebido is None:
+            return 0
+
+        set_clauses = []
+        query_params = []
+
+        if payload.url is not None:
+            set_clauses.append("url = @url")
+            query_params.append(bigquery.ScalarQueryParameter("url", "STRING", payload.url))
+
+        if payload.url_embebido is not None:
+            set_clauses.append("url_embebido = @url_embebido")
+            query_params.append(bigquery.ScalarQueryParameter("url_embebido", "STRING", payload.url_embebido))
+
+        set_clauses.append("fecha_actualizacion = @fecha_actualizacion")
+        query_params.append(
+            bigquery.ScalarQueryParameter("fecha_actualizacion", "TIMESTAMP", datetime.utcnow())
+        )
+        query_params.append(bigquery.ScalarQueryParameter("producto_id", "STRING", producto_id))
+
+        update_query = f"""
+        UPDATE `marketing-dwh-specs.DWH.DIM_MAESTRO_DASH`
+        SET {', '.join(set_clauses)}
+        WHERE producto_id = @producto_id
+        """
+
+        try:
+            job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+            job = self.client.query(update_query, job_config=job_config)
+            job.result()
+            return job.num_dml_affected_rows or 0
+        except Exception as e:
+            raise DatabaseConnectionError(details={"Dashboard update error": str(e)})
 
 
 dashboard_service = DashboardService()
