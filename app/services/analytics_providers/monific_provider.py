@@ -32,18 +32,18 @@ FORMATO DE analytics_data:
   * serie_diaria_top: incluye "fecha" (DATE), nombre_campana, network, os, cpa_registro, cpa_llenado,
     cpa_inversion_exitosa.
 
-- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "network" (plataforma publicitaria: Google Ads, Meta, TikTok, etc.).
-  El análisis de rendimiento primario es por network. OS es una dimensión informativa disponible en top_campanas_mes y serie_diaria_top.
+- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "network" (plataforma publicitaria: Google Ads, Meta, TikTok Ads).
+  El análisis de rendimiento primario es por network. OS (Android, iOS, Web) es una dimensión informativa disponible en top_campanas_mes y serie_diaria_top.
 - NOTA SEMÁNTICA CPA: "Mejor CPA" = valor MÁS BAJO (adquisición más barata). "Peor CPA" = valor MÁS ALTO. NUNCA invertir.
 - Los KPIs (CPA/CVR) serán NULL si el denominador es 0; NO los trates como 0.
-- Filtrado previo: source = 'Singular', excluye os = '', campañas 'unknown', network en ('Organic', 'Others').
+- Filtrado previo: source = 'Singular', os filtrado a ('Android', 'iOS', 'Web'), network filtrado a ('Google Ads', 'Meta', 'TikTok Ads'), excluye campañas 'unknown'.
   Requiere al menos una señal (inversion > 0 OR registro_simple > 0 OR llenado_contrato > 0 OR inversion_exitosa_count > 0).
 
 DICCIONARIO DE DATOS:
 - fecha: día del dato.
-- os: sistema operativo (Android, iOS, Web) — disponible como campo informativo en top_campanas_mes y serie_diaria_top.
+- os: sistema operativo (Android, iOS, Web) — filtrado a estos 3 valores. Disponible como campo informativo en top_campanas_mes y serie_diaria_top.
 - nombre_campana: identificador de campaña.
-- network: plataforma publicitaria (ej: Google Ads, Meta, TikTok).
+- network: plataforma publicitaria (Google Ads, Meta, TikTok Ads). Filtrado a estos 3 valores.
 - inversion: gasto publicitario total.
 - presupuesto: presupuesto máximo asignado.
 - impresiones: impresiones servidas.
@@ -220,7 +220,7 @@ GRÁFICOS SUGERIDOS (1-2):
      - Dataset: totales_por_network (agrupar por network, sumar inversion_exitosa_count)
      - Highcharts: type="column"
 INSIGHTS OBLIGATORIOS:
-  - Comparar networks (Google Ads vs Meta vs TikTok) en eficiencia (CPA) y volumen
+  - Comparar networks (Google Ads vs Meta vs TikTok Ads) en eficiencia (CPA) y volumen
   - Identificar combinación network más eficiente usando top_campanas_mes
   - Desglosar por OS como dato informativo usando top_campanas_mes si es relevante
   - Recomendar ajuste de budget hacia network con mejor CPA
