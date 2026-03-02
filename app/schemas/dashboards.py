@@ -37,6 +37,23 @@ class DashboardListResponse(BaseModel):
     page: int
     per_page: int
 
+class DashboardUpdateRequest(BaseModel):
+    url: Optional[str] = Field(None, description="Nueva URL del dashboard")
+    url_embebido: Optional[str] = Field(None, description="Nueva URL embebida del dashboard")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "url": "https://example.com/dashboards/db001",
+                "url_embebido": "https://example.com/embed/db001"
+            }
+        }
+
+class DashboardUpdateResponse(BaseModel):
+    message: str
+    producto_id: str
+    rows_affected: int
+
 class DashboardInternal(BaseModel):
     dashboard_id: str
     empresa_id: str
