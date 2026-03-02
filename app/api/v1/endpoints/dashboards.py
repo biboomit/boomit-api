@@ -4,7 +4,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.middleware.auth import get_current_user
 from app.services.dashboards import DashboardService, dashboard_service
-from app.schemas.dashboards import DashboardResponse, DashboardListResponse, DashboardUpdateRequest, DashboardUpdateResponse
+from app.schemas.dashboards import DashboardResponse, DashboardListResponse, DashboardUpdateRequest, DashboardUpdateResponse, DashboardCreateRequest, DashboardCreateResponse
 
 router = APIRouter()
 
