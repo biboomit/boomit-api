@@ -47,6 +47,48 @@ async def get_dashboards(
     except Exception as e:
         raise e
 
+@router.get("/{product_id}", response_model=DashboardResponse)
+async def get_dashboard_by_product_id(
+    product_id: str,
+    service: DashboardService = Depends(get_dashboard_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """Obtener un dashboard por product_id.
+
+    Args:
+        product_id (str): Identificador del producto asociado al dashboard.
+    """
+    try:
+        dashboard = await service.get_dashboard_by_product_id(product_id=product_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"No se encontró un dashboard con product_id '{product_id}'.")
+        return DashboardResponse(**dashboard.to_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise e
+
+
+@router.post("/", response_model=DashboardCreateResponse, status_code=201)
+async def create_dashboard(
+    body: DashboardCreateRequest,
+    service: DashboardService = Depends(get_dashboard_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """Crear un nuevo registro de dashboard en DIM_MAESTRO_DASH.
+
+    Args:
+        body (DashboardCreateRequest): Datos del nuevo dashboard.
+    """
+    try:
+        rows_affected = await service.create_dashboard(payload=body)
+        return DashboardCreateResponse(
+            message="Dashboard creado correctamente.",
+            dash_id=body.dash_id,
+            rows_affected=rows_affected,
+        )
+    except Exception as e:
+        raise e
 
 @router.put("/{producto_id}", response_model=DashboardUpdateResponse)
 async def update_dashboard(
