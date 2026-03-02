@@ -4,7 +4,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.middleware.auth import get_current_user
 from app.services.dashboards import DashboardService, dashboard_service
-from app.schemas.dashboards import DashboardResponse, DashboardListResponse
+from app.schemas.dashboards import DashboardResponse, DashboardListResponse, DashboardUpdateRequest, DashboardUpdateResponse
 
 router = APIRouter()
 
@@ -44,5 +44,36 @@ async def get_dashboards(
         return DashboardListResponse(
             dashboards=dashboard_responses, total=total, page=page, per_page=per_page
         )
+    except Exception as e:
+        raise e
+
+
+@router.put("/{producto_id}", response_model=DashboardUpdateResponse)
+async def update_dashboard(
+    producto_id: str,
+    body: DashboardUpdateRequest,
+    service: DashboardService = Depends(get_dashboard_service),
+    current_user: dict = Depends(get_current_user),
+):
+    """Actualizar url y/o url_embebido de un dashboard por producto_id.
+
+    Args:
+        producto_id (str): Identificador del producto asociado al dashboard.
+        body (DashboardUpdateRequest): Campos a actualizar (url, url_embebido).
+    """
+    if body.url is None and body.url_embebido is None:
+        raise HTTPException(status_code=422, detail="Debe proporcionar al menos un campo para actualizar: url o url_embebido.")
+
+    try:
+        rows_affected = await service.update_dashboard(producto_id=producto_id, payload=body)
+        if rows_affected == 0:
+            raise HTTPException(status_code=404, detail=f"No se encontró un dashboard con producto_id '{producto_id}'.")
+        return DashboardUpdateResponse(
+            message="Dashboard actualizado correctamente.",
+            producto_id=producto_id,
+            rows_affected=rows_affected,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise e

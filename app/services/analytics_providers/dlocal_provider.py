@@ -5,21 +5,18 @@ from app.services.analytics_providers.base import AnalyticsProvider
 
 DLOCAL_EXPLANATION = """
 FORMATO DE analytics_data:
-- dataset: uno de ["totales_globales_periodo", "totales_por_pais", "totales_por_estrategia",
-  "serie_diaria_agregada", "funnel_por_pais", "funnel_por_estrategia",
+- dataset: uno de ["totales_globales_periodo", "totales_por_pais",
+  "serie_diaria_agregada", "funnel_por_estrategia",
   "top_campanas_mes", "serie_diaria_top"].
 
   * totales_globales_periodo: 1 fila con métricas agregadas del rango completo, incluye presupuesto,
     pacing, daily_spend_rate y spend_remaining.
   * totales_por_pais: filas con totales por país (pais). KPIs pre-calculados. Ordenado por
     contact_sales_submission DESC.
-  * totales_por_estrategia: filas con totales por estrategia de campaña. KPIs pre-calculados.
-    Ordenado por contact_sales_submission DESC.
   * serie_diaria_agregada: filas con métricas diarias TOTALES (todos los países/estrategias sumados)
     por fecha. CPAs y CVRs pre-calculados.
-  * funnel_por_pais: filas con las 3 etapas del funnel por país (etapa_1_usuarios_totales,
+  * funnel_por_estrategia: filas con las 3 etapas del funnel por estrategia (etapa_1_usuarios_totales,
     etapa_2_users_click_contact_sales, etapa_3_contact_sales_submission) y CVRs.
-  * funnel_por_estrategia: igual que funnel_por_pais pero agrupado por estrategia.
   * top_campanas_mes: hasta top_n campañas rankeadas por contact_sales_submission (luego inversión).
     Incluye nombre_campana, pais, network, estrategia, flag_payin_payout (informativo), y KPIs.
   * serie_diaria_top: serie diaria solo de las top_n campañas con CPAs y CVRs pre-calculados.
@@ -30,11 +27,9 @@ FORMATO DE analytics_data:
   * totales_globales_periodo: incluye presupuesto, pacing_porcentaje, daily_spend_rate, spend_remaining,
     costo_gads, costo_linkedin, costo_bing, sesiones.
   * totales_por_pais: incluye "pais", sesiones, users_click_contact_sales_sub.
-  * totales_por_estrategia: incluye "estrategia", sesiones, users_click_contact_sales_sub.
   * serie_diaria_agregada: incluye "fecha" (DATE). CPAs y CVRs ya pre-calculados por día.
-  * funnel_por_pais: incluye "pais", etapa_1_usuarios_totales, etapa_2_users_click_contact_sales,
+  * funnel_por_estrategia: incluye "estrategia", etapa_1_usuarios_totales, etapa_2_users_click_contact_sales,
     etapa_3_contact_sales_submission, cvr_users_click, cvr_click_submission.
-  * funnel_por_estrategia: incluye "estrategia", mismas etapas y CVRs que funnel_por_pais.
   * top_campanas_mes: incluye nombre_campana, pais, network, estrategia, flag_payin_payout,
     cpa_click_contact_sales, cpa_submission, cvr_users_click, cvr_click_submission.
   * serie_diaria_top: incluye "fecha" (DATE), nombre_campana, pais, network, estrategia,
@@ -106,8 +101,7 @@ BLOQUE: cvr_indices
 --------------------
 OBJETIVO: Visualizar tasas de conversión del funnel por país y estrategia
 DATASETS A USAR:
-  - funnel_por_pais (para FUNNEL_CHART y desglose de CVR por país)
-  - funnel_por_estrategia (para comparar CVR entre estrategias)
+  - funnel_por_estrategia (para FUNNEL_CHART y desglose de CVR por estrategia)
   - totales_globales_periodo (para CVRs globales del período)
 
 GRÁFICOS OBLIGATORIOS (2 gráficos):
@@ -118,17 +112,16 @@ GRÁFICOS OBLIGATORIOS (2 gráficos):
        ["Click Contact Sales", valor], ["Contact Sales Submission", valor]]
      - IMPORTANTE: Formato de data DEBE ser array de arrays, NO objetos con name
      - Incluir plotOptions básicas: dataLabels enabled, center, neckWidth, neckHeight
-  2) BAR_CHART de cvr_click_submission por pais (etapa más restrictiva del funnel)
-     - Dataset: funnel_por_pais (usar campo cvr_click_submission por pais)
-     - Highcharts: type="bar", xAxis.categories=[países], series.data=[cvr_click_submission]
-     - ALTERNATIVA: Usar funnel_por_estrategia si la variabilidad entre estrategias es mayor
+  2) BAR_CHART de cvr_click_submission por estrategia (etapa más restrictiva del funnel)
+     - Dataset: funnel_por_estrategia (usar campo cvr_click_submission por estrategia)
+     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[cvr_click_submission]
 
 INSIGHTS OBLIGATORIOS:
   - Identificar la etapa del funnel con mayor caída usando cvr_users_click y cvr_click_submission
     de totales_globales_periodo
   - Mencionar: "De cada 100 usuarios, X hacen clic en Contact Sales y solo Y envían la solicitud"
-  - Comparar CVR entre países usando funnel_por_pais (qué mercado convierte mejor)
   - Comparar CVR entre estrategias usando funnel_por_estrategia
+  - Comparar CVR entre países usando totales_por_pais (que tiene cvr_users_click y cvr_click_submission)
   - Calcular % de caída en cada etapa: (1 - CVR) * 100
 
 BLOQUE: evolucion_conversiones
@@ -234,13 +227,13 @@ BLOQUE: aprendizajes
 OBJETIVO: Comparar performance entre países, estrategias y plataformas (network)
 GRÁFICOS SUGERIDOS (1-2):
   1) BAR_RANKING de cpa_submission por estrategia
-     - Dataset: totales_por_estrategia (ranking directo de CPA por estrategia)
-     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[cpa_submission]
+     - Dataset: funnel_por_estrategia (usar campo cvr_click_submission por estrategia)
+     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[cvr_click_submission]
   2) COLUMN_CHART de contact_sales_submission por pais y estrategia
      - Dataset: top_campanas_mes (agrupar por pais o estrategia, sumar contact_sales_submission)
      - Highcharts: type="column"
 INSIGHTS OBLIGATORIOS:
-  - Comparar estrategias en términos de CPA y volumen de submissions (usar totales_por_estrategia)
+  - Comparar estrategias en términos de CVR y volumen de submissions (usar funnel_por_estrategia)
   - Comparar países en eficiencia (cpa_submission) y volumen (usar totales_por_pais)
   - Identificar combinación país + estrategia más eficiente usando top_campanas_mes
   - Comparar plataformas (Google Ads vs LinkedIn vs Bing) usando costo_gads/linkedin/bing
@@ -257,8 +250,8 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     Funnel: Usuarios Totales → Users Click Contact Sales → Contact Sales Submission
     Primary segmentation: pais (country) and estrategia (strategy)
     Networks: Google Ads, LinkedIn Ads, Bing Ads
-    Datasets: totales_globales_periodo, totales_por_pais, totales_por_estrategia,
-              serie_diaria_agregada, funnel_por_pais, funnel_por_estrategia,
+    Datasets: totales_globales_periodo, totales_por_pais,
+              serie_diaria_agregada, funnel_por_estrategia,
               top_campanas_mes, serie_diaria_top
     """
 

@@ -5,17 +5,14 @@ from app.services.analytics_providers.base import AnalyticsProvider
 
 MONIFIC_EXPLANATION = """
 FORMATO DE analytics_data:
-- dataset: uno de ["totales_globales_periodo", "totales_por_os", "serie_diaria_agregada",
-  "funnel_por_os", "funnel_por_network", "totales_por_network",
-  "serie_diaria_por_network", "top_campanas_mes", "serie_diaria_top"].
+- dataset: uno de ["totales_globales_periodo", "serie_diaria_agregada",
+  "funnel_por_network", "totales_por_network",
+  "top_campanas_mes", "serie_diaria_top"].
 
   * totales_globales_periodo: 1 fila con métricas agregadas del rango completo, incluye presupuesto y pacing.
-  * totales_por_os: filas con totales por sistema operativo (os: Android, iOS, Web). KPIs pre-calculados.
-  * serie_diaria_agregada: filas con métricas diarias TOTALES (sumadas, todos los OS) por fecha, CON CPAs y CVRs pre-calculados.
-  * funnel_por_os: filas con las 3 etapas del funnel por OS (etapa_2_registro_simple, etapa_3_llenado_contrato, etapa_4_inversion_exitosa) y CVRs.
-  * funnel_por_network: igual que funnel_por_os pero agrupado por network.
+  * serie_diaria_agregada: filas con métricas diarias TOTALES (sumadas, todos los networks) por fecha, CON CPAs y CVRs pre-calculados.
+  * funnel_por_network: filas con las 3 etapas del funnel por network (etapa_2_registro_simple, etapa_3_llenado_contrato, etapa_4_inversion_exitosa) y CVRs.
   * totales_por_network: filas con totales por plataforma publicitaria (network), KPIs pre-calculados.
-  * serie_diaria_por_network: filas con métricas diarias desglosadas por network y fecha, SIN CPAs.
   * top_campanas_mes: hasta top_n campañas rankeadas por inversion_exitosa_count (luego inversión), con network y os.
   * serie_diaria_top: serie diaria solo de las top_n campañas (fecha, nombre_campana, network, os, métricas, CPAs).
 
@@ -24,11 +21,8 @@ FORMATO DE analytics_data:
 - Campos específicos por dataset:
   * totales_globales_periodo: incluye presupuesto, pacing_porcentaje, tracker_installs, impresiones, clicks,
     instalaciones, cvr_install_registro.
-  * totales_por_os: incluye os, tracker_installs, impresiones, clicks, instalaciones, cvr_install_registro.
   * serie_diaria_agregada: incluye "fecha" (DATE), cpa_registro, cpa_llenado, cpa_inversion_exitosa,
-    cvr_registro_llenado, cvr_llenado_inversion. Ya está agregado por fecha (todos los OS sumados).
-  * funnel_por_os: incluye "os", etapa_2_registro_simple, etapa_3_llenado_contrato, etapa_4_inversion_exitosa,
-    cvr_install_registro, cvr_registro_llenado, cvr_llenado_inversion.
+    cvr_registro_llenado, cvr_llenado_inversion. Ya está agregado por fecha (todos los networks sumados).
   * funnel_por_network: incluye "network", etapa_2_registro_simple, etapa_3_llenado_contrato,
     etapa_4_inversion_exitosa, cvr_install_registro, cvr_registro_llenado, cvr_llenado_inversion.
   * totales_por_network: incluye "network", tracker_installs, impresiones, clicks, instalaciones,
@@ -38,8 +32,8 @@ FORMATO DE analytics_data:
   * serie_diaria_top: incluye "fecha" (DATE), nombre_campana, network, os, cpa_registro, cpa_llenado,
     cpa_inversion_exitosa.
 
-- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "os" (sistema operativo: Android, iOS, Web).
-  El análisis de rendimiento primario es por OS. Network es una dimensión secundaria.
+- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "network" (plataforma publicitaria: Google Ads, Meta, TikTok, etc.).
+  El análisis de rendimiento primario es por network. OS es una dimensión informativa disponible en top_campanas_mes y serie_diaria_top.
 - NOTA SEMÁNTICA CPA: "Mejor CPA" = valor MÁS BAJO (adquisición más barata). "Peor CPA" = valor MÁS ALTO. NUNCA invertir.
 - Los KPIs (CPA/CVR) serán NULL si el denominador es 0; NO los trates como 0.
 - Filtrado previo: source = 'Singular', excluye os = '', campañas 'unknown', network en ('Organic', 'Others').
@@ -47,7 +41,7 @@ FORMATO DE analytics_data:
 
 DICCIONARIO DE DATOS:
 - fecha: día del dato.
-- os: sistema operativo (Android, iOS, Web).
+- os: sistema operativo (Android, iOS, Web) — disponible como campo informativo en top_campanas_mes y serie_diaria_top.
 - nombre_campana: identificador de campaña.
 - network: plataforma publicitaria (ej: Google Ads, Meta, TikTok).
 - inversion: gasto publicitario total.
@@ -77,31 +71,32 @@ Cada bloque problemático DEBE incluir los gráficos especificados a continuaci�
 
 BLOQUE: analisis_region
 -----------------------
-NOTA: Este proveedor segmenta principalmente por OS (Android, iOS, Web), NO por país.
-OBJETIVO: Mostrar performance por sistema operativo
-DATASET A USAR: totales_por_os (YA viene pre-agregado por os, NO necesitas agrupar)
+NOTA: Este proveedor segmenta principalmente por network (plataforma publicitaria).
+      OS está disponible como campo informativo en top_campanas_mes.
+OBJETIVO: Mostrar performance por network (plataforma publicitaria)
+DATASET A USAR: totales_por_network (YA viene pre-agregado por network, NO necesitas agrupar)
 
 GRÁFICOS OBLIGATORIOS (elegir 2):
-  1) BAR_RANKING de inversion_exitosa_count por os
-     - Dataset: totales_por_os (usar directamente)
-     - Highcharts: type="bar", xAxis.categories=[os values], series.data=[inversion_exitosa_count por os]
+  1) BAR_RANKING de inversion_exitosa_count por network
+     - Dataset: totales_por_network (usar directamente)
+     - Highcharts: type="bar", xAxis.categories=[network values], series.data=[inversion_exitosa_count por network]
      - Ordenar descendente por inversion_exitosa_count (el dataset ya viene ordenado)
-  2) DONUT_SHARE de inversión por os
-     - Dataset: totales_por_os
-     - Highcharts: type="pie", innerSize="50%", series.data=[{name: os, y: inversión}]
+  2) DONUT_SHARE de inversión por network
+     - Dataset: totales_por_network
+     - Highcharts: type="pie", innerSize="50%", series.data=[{name: network, y: inversión}]
 
 INSIGHTS OBLIGATORIOS:
-  - Identificar OS con mayor inversion_exitosa_count y mencionar su cpa_inversion_exitosa
-  - Comparar eficiencia (cpa_inversion_exitosa) entre OS (Android vs iOS vs Web)
-  - Calcular % de participación: inversion_exitosa_count del top OS / total de totales_globales_periodo
-  - Mencionar cuántos OS tienen datos (contar filas de totales_por_os)
+  - Identificar network con mayor inversion_exitosa_count y mencionar su cpa_inversion_exitosa
+  - Comparar eficiencia (cpa_inversion_exitosa) entre networks
+  - Calcular % de participación: inversion_exitosa_count del top network / total de totales_globales_periodo
+  - Mencionar cuántos networks tienen datos (contar filas de totales_por_network)
+  - Desglosar por OS usando top_campanas_mes (qué OS genera más inversiones exitosas)
 
 BLOQUE: cvr_indices
 --------------------
 OBJETIVO: Visualizar tasas de conversión del funnel y caídas por etapa
 DATASETS A USAR:
-  - funnel_por_os (para FUNNEL_CHART desglosado por OS y CVRs por etapa)
-  - funnel_por_network (para comparar CVR entre plataformas)
+  - funnel_por_network (para FUNNEL_CHART desglosado por network y CVRs por etapa)
   - totales_globales_periodo (para CVRs globales del período)
 
 GRÁFICOS OBLIGATORIOS (2 gráficos):
@@ -110,15 +105,14 @@ GRÁFICOS OBLIGATORIOS (2 gráficos):
      - Highcharts: type="funnel", data format: [["Tracker Installs", tracker_installs], ["Registro Simple", registro_simple], ["Llenado de Contrato", llenado_contrato], ["Inversión Exitosa", inversion_exitosa_count]]
      - IMPORTANTE: Formato de data DEBE ser array de arrays, NO objetos con name
      - Incluir plotOptions básicas: dataLabels enabled, center, neckWidth, neckHeight
-  2) BAR_CHART de cvr_llenado_inversion por OS (la etapa más restrictiva del funnel)
-     - Dataset: funnel_por_os (usar campo cvr_llenado_inversion por os)
-     - Highcharts: type="bar", xAxis.categories=[os], series.data=[cvr_llenado_inversion]
-     - ALTERNATIVA: Usar funnel_por_network si hay más variabilidad entre networks
+  2) BAR_CHART de cvr_llenado_inversion por network (la etapa más restrictiva del funnel)
+     - Dataset: funnel_por_network (usar campo cvr_llenado_inversion por network)
+     - Highcharts: type="bar", xAxis.categories=[network], series.data=[cvr_llenado_inversion]
 
 INSIGHTS OBLIGATORIOS:
   - Identificar la etapa del funnel con mayor caída (comparar cvr_install_registro, cvr_registro_llenado, cvr_llenado_inversion de totales_globales_periodo)
   - Mencionar: "De cada 100 tracker installs, X completan registro, Y llenan el contrato y Z realizan inversión exitosa"
-  - Comparar CVR entre OS usando funnel_por_os (qué OS convierte mejor en cada etapa)
+  - Comparar CVR entre networks usando funnel_por_network (qué network convierte mejor en cada etapa)
   - Calcular % de caída en cada etapa: (1 - CVR) * 100
 
 BLOQUE: evolucion_conversiones
@@ -213,23 +207,23 @@ INSIGHTS OBLIGATORIOS:
   - Mencionar campaña más exitosa (nombre + inversion_exitosa_count + CPA_inversion_exitosa)
   - Mencionar campaña menos eficiente (alto CPA, poca inversión exitosa)
   - Resumen ejecutivo: "Inversión total $X generó Y inversiones exitosas a un CPA de $Z"
-  - Desglosar por OS (cuál generó más inversiones exitosas)
+  - Desglosar por network (cuál generó más inversiones exitosas usando top_campanas_mes)
 
 BLOQUE: aprendizajes
 ---------------------
-OBJETIVO: Comparar performance entre OS y Networks
+OBJETIVO: Comparar performance entre Networks
 GRÁFICOS SUGERIDOS (1-2):
-  1) BAR_RANKING de cpa_inversion_exitosa por OS
-     - Dataset: totales_por_os (ranking directo de CPA por os)
-     - Highcharts: type="bar", xAxis.categories=[os], series.data=[cpa_inversion_exitosa]
+  1) BAR_RANKING de cpa_inversion_exitosa por network
+     - Dataset: totales_por_network (ranking directo de CPA por network)
+     - Highcharts: type="bar", xAxis.categories=[network], series.data=[cpa_inversion_exitosa]
   2) COLUMN_CHART de inversion_exitosa_count por network
      - Dataset: totales_por_network (agrupar por network, sumar inversion_exitosa_count)
      - Highcharts: type="column"
 INSIGHTS OBLIGATORIOS:
-  - Comparar OS en términos de CPA y volumen de inversiones exitosas
-  - Comparar networks (Google Ads vs Meta vs TikTok) en eficiencia y volumen
-  - Identificar combinación OS + network más eficiente usando top_campanas_mes
-  - Recomendar ajuste de budget hacia OS/network con mejor CPA
+  - Comparar networks (Google Ads vs Meta vs TikTok) en eficiencia (CPA) y volumen
+  - Identificar combinación network más eficiente usando top_campanas_mes
+  - Desglosar por OS como dato informativo usando top_campanas_mes si es relevante
+  - Recomendar ajuste de budget hacia network con mejor CPA
 """.strip()
 
 
@@ -239,10 +233,11 @@ class MonificAnalyticsProvider(AnalyticsProvider):
 
     Microservice: monific-dashboard-data
     Funnel: tracker_installs → Registro Simple → Llenado de Contrato → Inversión Exitosa
-    Primary segmentation: OS (Android, iOS, Web)
-    Datasets: totales_globales_periodo, totales_por_os, serie_diaria_agregada,
-              funnel_por_os, funnel_por_network,
-              totales_por_network, serie_diaria_por_network,
+    Primary segmentation: Network (plataforma publicitaria)
+    Secondary info: OS (disponible en top_campanas_mes y serie_diaria_top)
+    Datasets: totales_globales_periodo, serie_diaria_agregada,
+              funnel_por_network,
+              totales_por_network,
               top_campanas_mes, serie_diaria_top
     """
 
@@ -275,7 +270,7 @@ class MonificAnalyticsProvider(AnalyticsProvider):
             "- **CVR_install_registro**: Tasa conversión tracker_installs → registro simple\n"
             "- **CVR_registro_llenado**: Tasa conversión registro simple → llenado de contrato\n"
             "- **CVR_llenado_inversion**: Tasa conversión llenado de contrato → inversión exitosa\n"
-            "- **OS**: Sistema operativo — dimensión principal de segmentación (Android, iOS, Web)\n"
+            "- **OS**: Sistema operativo — campo informativo en top_campanas_mes (Android, iOS, Web)\n"
             "\n**Funnel de Conversión:** Inversión → Tracker Installs → Registro Simple → Llenado de Contrato → Inversión Exitosa"
         )
 
@@ -291,6 +286,6 @@ class MonificAnalyticsProvider(AnalyticsProvider):
             "- Inversión Exitosa: inversiones completadas (KPI crítico)\n"
             "- CPA_inversion_exitosa: costo por inversión exitosa = inversión / inversion_exitosa_count\n"
             "- CVR_llenado_inversion: tasa conversión llenado → inversión exitosa (etapa más restrictiva)\n"
-            "- OS: segmentación principal (Android, iOS, Web)\n"
+            "- OS: campo informativo en top_campanas_mes (Android, iOS, Web)\n"
             "- Funnel: Inversión → Tracker Installs → Registro Simple → Llenado de Contrato → Inversión Exitosa"
         )
