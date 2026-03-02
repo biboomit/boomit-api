@@ -5,15 +5,13 @@ from app.services.analytics_providers.base import AnalyticsProvider
 
 DLOCAL_EXPLANATION = """
 FORMATO DE analytics_data:
-- dataset: uno de ["totales_globales_periodo", "totales_por_pais",
+- dataset: uno de ["totales_globales_periodo",
   "serie_diaria_agregada", "funnel_por_estrategia",
   "top_campanas_mes", "serie_diaria_top"].
 
   * totales_globales_periodo: 1 fila con métricas agregadas del rango completo, incluye presupuesto,
     pacing, daily_spend_rate y spend_remaining.
-  * totales_por_pais: filas con totales por país (pais). KPIs pre-calculados. Ordenado por
-    contact_sales_submission DESC.
-  * serie_diaria_agregada: filas con métricas diarias TOTALES (todos los países/estrategias sumados)
+  * serie_diaria_agregada: filas con métricas diarias TOTALES (todos las estrategias sumadas)
     por fecha. CPAs y CVRs pre-calculados.
   * funnel_por_estrategia: filas con las 3 etapas del funnel por estrategia (etapa_1_usuarios_totales,
     etapa_2_users_click_contact_sales, etapa_3_contact_sales_submission) y CVRs.
@@ -26,7 +24,6 @@ FORMATO DE analytics_data:
 - Campos específicos por dataset:
   * totales_globales_periodo: incluye presupuesto, pacing_porcentaje, daily_spend_rate, spend_remaining,
     costo_gads, costo_linkedin, costo_bing, sesiones.
-  * totales_por_pais: incluye "pais", sesiones, users_click_contact_sales_sub.
   * serie_diaria_agregada: incluye "fecha" (DATE). CPAs y CVRs ya pre-calculados por día.
   * funnel_por_estrategia: incluye "estrategia", etapa_1_usuarios_totales, etapa_2_users_click_contact_sales,
     etapa_3_contact_sales_submission, cvr_users_click, cvr_click_submission.
@@ -35,21 +32,23 @@ FORMATO DE analytics_data:
   * serie_diaria_top: incluye "fecha" (DATE), nombre_campana, pais, network, estrategia,
     cpa_click_contact_sales, cpa_submission, cvr_users_click, cvr_click_submission.
 
-- DIMENSIONES PRINCIPALES DE SEGMENTACIÓN: "pais" y "estrategia" (ambas igualmente importantes).
-  Países normalizados: United Kingdom, United States, Spain, Japan, Germany, Others.
+- DIMENSIÓN PRINCIPAL DE SEGMENTACIÓN: "estrategia" (Payins vs Payouts).
+  FILTRO GEOGRÁFICO FIJO: Todos los datos corresponden EXCLUSIVAMENTE a United States.
+  No hay desglose por país — la dimensión geográfica está pre-filtrada.
 - NOTA SEMÁNTICA CPA: "Mejor CPA" = valor MÁS BAJO. "Peor CPA" = valor MÁS ALTO. NUNCA invertir.
 - Los KPIs (CPA/CVR) serán NULL si el denominador es 0; NO los trates como 0.
-- Filtrado previo: excluye network en ('Organic', 'Others'). Solo incluye estrategias: 'Others', 'Payins', 'Payouts'.
+- Filtrado previo: network filtrado a ('Google Ads', 'Meta', 'TikTok Ads'). Solo incluye estrategias: 'Payins', 'Payouts'.
+  flag_payin_payout filtrado a 'Others'. Solo incluye datos de United States (filtro geográfico fijo).
   Requiere al menos una señal
   (inversion > 0 OR usuarios_totales > 0 OR contact_sales_submission > 0).
 
 DICCIONARIO DE DATOS:
 - fecha: día del dato.
 - nombre_campana: nombre de la campaña publicitaria.
-- pais: país normalizado de la campaña (United Kingdom, United States, Spain, Japan, Germany, Others).
-- network: plataforma publicitaria (Google Ads, LinkedIn Ads, Bing Ads, etc.).
-- estrategia: clasificación estratégica interna de la campaña (filtrado a: Others, Payins, Payouts).
-- flag_payin_payout: indicador Payin/Payout/Handbook (columna informativa en top_campanas_mes).
+- pais: país de la campaña (FILTRADO FIJO a United States — todos los registros son de US).
+- network: plataforma publicitaria (Google Ads, Meta, TikTok Ads). Filtrado a estos 3 valores.
+- estrategia: clasificación estratégica interna de la campaña (filtrado a: Payins, Payouts).
+- flag_payin_payout: indicador Payin/Payout/Handbook (FILTRADO FIJO a 'Others' — todos los registros tienen este valor).
 - inversion: gasto publicitario total (costo_gads + costo_linkedin + costo_bing).
 - costo_gads: inversión en Google Ads.
 - costo_linkedin: inversión en LinkedIn Ads.
@@ -78,24 +77,23 @@ Cada bloque problemático DEBE incluir los gráficos especificados a continuaci�
 
 BLOQUE: analisis_region
 -----------------------
-OBJETIVO: Mostrar performance por país — dimensión geográfica principal de Dlocal
-DATASET A USAR: totales_por_pais (YA viene pre-agregado por país, NO necesitas agrupar)
+OBJETIVO: Mostrar performance por estrategia — dimensión principal de segmentación en Dlocal US
+NOTA: Todos los datos son de United States (filtro fijo). No hay desglose geográfico multi-país.
+DATASET A USAR: funnel_por_estrategia (YA viene pre-agregado por estrategia, NO necesitas agrupar)
 
 GRÁFICOS OBLIGATORIOS (elegir 2):
-  1) BAR_RANKING de contact_sales_submission por pais
-     - Dataset: totales_por_pais (usar directamente, ya tiene submission sumado por país)
-     - Highcharts: type="bar", xAxis.categories=[países], series.data=[contact_sales_submission por país]
-     - Ordenar descendente por contact_sales_submission (el dataset ya viene ordenado)
-  2) DONUT_SHARE de inversión por pais
-     - Dataset: totales_por_pais
-     - Highcharts: type="pie", innerSize="50%", series.data=[{name: país, y: inversión}]
+  1) BAR_RANKING de contact_sales_submission por estrategia
+     - Dataset: funnel_por_estrategia (usar campo etapa_3_contact_sales_submission por estrategia)
+     - Highcharts: type="bar", xAxis.categories=[estrategias], series.data=[submissions por estrategia]
+  2) DONUT_SHARE de usuarios totales por estrategia
+     - Dataset: funnel_por_estrategia (usar campo etapa_1_usuarios_totales)
+     - Highcharts: type="pie", innerSize="50%", series.data=[{name: estrategia, y: usuarios}]
 
 INSIGHTS OBLIGATORIOS:
-  - Identificar país con mayor contact_sales_submission y mencionar su cpa_submission
-  - Comparar eficiencia (cpa_submission) entre países usando totales_por_pais
-  - Calcular % de participación: submission del top país / submission total de totales_globales_periodo
-  - Mencionar cuántos países tienen datos (contar filas de totales_por_pais)
-  - Mencionar si "Others" concentra una parte significativa de la inversión
+  - Comparar Payins vs Payouts en volumen de submissions y en CVR (cvr_click_submission)
+  - Identificar qué estrategia tiene mejor tasa de conversión del funnel completo
+  - Calcular % de participación de cada estrategia en el total de submissions
+  - Mencionar que los datos corresponden exclusivamente a United States
 
 BLOQUE: cvr_indices
 --------------------
@@ -121,7 +119,6 @@ INSIGHTS OBLIGATORIOS:
     de totales_globales_periodo
   - Mencionar: "De cada 100 usuarios, X hacen clic en Contact Sales y solo Y envían la solicitud"
   - Comparar CVR entre estrategias usando funnel_por_estrategia
-  - Comparar CVR entre países usando totales_por_pais (que tiene cvr_users_click y cvr_click_submission)
   - Calcular % de caída en cada etapa: (1 - CVR) * 100
 
 BLOQUE: evolucion_conversiones
@@ -170,7 +167,7 @@ INSIGHTS OBLIGATORIOS:
   - Identificar día con MEJOR CPA_submission (valor más bajo en serie_diaria_agregada)
   - Identificar día con PEOR CPA_submission (valor más alto en serie_diaria_agregada)
   - ADVERTENCIA: Días con muy pocas submissions (ej: 1-2) tendrán CPA extremo. Mencionarlo.
-  - Comparar inversión por plataforma (Google Ads vs LinkedIn vs Bing) usando totales_globales_periodo
+  - Comparar inversión por plataforma (Google Ads vs Meta vs TikTok Ads) usando totales_globales_periodo
 
 BLOQUE: proyecciones
 ---------------------
@@ -220,7 +217,7 @@ INSIGHTS OBLIGATORIOS:
   - Mencionar campaña más exitosa (nombre + contact_sales_submission + cpa_submission + pais)
   - Mencionar campaña menos eficiente (alto cpa_submission, pocas submissions)
   - Resumen ejecutivo: "Inversión total $X generó Y submissions a un CPA de $Z"
-  - Desglosar por país y estrategia (cuál combinación generó más submissions)
+  - Desglosar por estrategia (cuál estrategia generó más submissions)
 
 BLOQUE: aprendizajes
 ---------------------
@@ -234,11 +231,11 @@ GRÁFICOS SUGERIDOS (1-2):
      - Highcharts: type="column"
 INSIGHTS OBLIGATORIOS:
   - Comparar estrategias en términos de CVR y volumen de submissions (usar funnel_por_estrategia)
-  - Comparar países en eficiencia (cpa_submission) y volumen (usar totales_por_pais)
-  - Identificar combinación país + estrategia más eficiente usando top_campanas_mes
-  - Comparar plataformas (Google Ads vs LinkedIn vs Bing) usando costo_gads/linkedin/bing
+  - Identificar combinación estrategia + network más eficiente usando top_campanas_mes
+  - Comparar plataformas (Google Ads vs Meta vs TikTok Ads) usando costo_gads/linkedin/bing
     de totales_globales_periodo y relacionar con el network de top_campanas_mes
-  - Recomendar ajuste de budget hacia país/estrategia/plataforma con mejor CPA
+  - Recomendar ajuste de budget hacia estrategia/plataforma con mejor CPA
+  - Recordar que todos los datos son de United States (no comparar países)
 """.strip()
 
 
@@ -248,9 +245,10 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
 
     Microservice: dlocal-dashboard-data
     Funnel: Usuarios Totales → Users Click Contact Sales → Contact Sales Submission
-    Primary segmentation: pais (country) and estrategia (strategy)
-    Networks: Google Ads, LinkedIn Ads, Bing Ads
-    Datasets: totales_globales_periodo, totales_por_pais,
+    Geographic filter: United States only (pre-filtered)
+    Primary segmentation: estrategia (Payins / Payouts)
+    Networks: Google Ads, Meta, TikTok Ads
+    Datasets: totales_globales_periodo,
               serie_diaria_agregada, funnel_por_estrategia,
               top_campanas_mes, serie_diaria_top
     """
@@ -270,7 +268,7 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     def metrics_glossary(self) -> str:
         return (
             "\n**Glosario de Métricas de Marketing:**\n"
-            "- **Inversión**: Gasto publicitario total (Google Ads + LinkedIn Ads + Bing Ads)\n"
+            "- **Inversión**: Gasto publicitario total (Google Ads + Meta + TikTok Ads)\n"
             "- **Presupuesto**: Presupuesto máximo asignado para el período\n"
             "- **Pacing**: Porcentaje de ejecución del presupuesto = inversión / presupuesto\n"
             "- **Daily Spend Rate**: Ritmo de gasto diario = inversión / días del período\n"
@@ -282,8 +280,8 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
             "- **CPA_submission**: Costo por submission = inversión / contact_sales_submission (KPI FINAL)\n"
             "- **CVR_users_click**: Tasa conversión usuarios → clic = users_click_contact_sales / usuarios_totales\n"
             "- **CVR_click_submission**: Tasa conversión clic → submission = submission / users_click_contact_sales\n"
-            "- **País**: Dimensión geográfica (United States, United Kingdom, Spain, Japan, Germany, Others)\n"
-            "- **Estrategia**: Clasificación estratégica interna de la campaña\n"
+            "- **País**: Filtro fijo a United States (no hay desglose multi-país)\n"
+            "- **Estrategia**: Clasificación estratégica interna (Payins, Payouts)\n"
             "\n**Funnel de Conversión:** Inversión → Usuarios Totales → Click Contact Sales → Contact Sales Submission"
         )
 
@@ -291,7 +289,7 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
     def metrics_glossary_compact(self) -> str:
         return (
             "\n**Métricas clave:**\n"
-            "- Inversión: gasto total (Google Ads + LinkedIn + Bing)\n"
+            "- Inversión: gasto total (Google Ads + Meta + TikTok Ads)\n"
             "- Presupuesto / Pacing: presupuesto asignado y % de ejecución\n"
             "- Daily Spend Rate: ritmo de gasto diario\n"
             "- Spend Remaining: presupuesto no ejecutado\n"
@@ -300,6 +298,6 @@ class DlocalAnalyticsProvider(AnalyticsProvider):
             "- Contact Sales Submission: formularios enviados (KPI FINAL)\n"
             "- CPA_submission: costo por submission = inversión / submission\n"
             "- CVR_click_submission: tasa clic → submission (etapa más restrictiva)\n"
-            "- Segmentación: pais (geográfica) + estrategia (táctica)\n"
+            "- Segmentación: estrategia (Payins / Payouts), país fijo: United States\n"
             "- Funnel: Inversión → Usuarios Totales → Click Contact Sales → Contact Sales Submission"
         )
