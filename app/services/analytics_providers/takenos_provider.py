@@ -175,9 +175,12 @@ BLOQUE: resumen_ejecutivo
 --------------------------
 OBJETIVO: Síntesis de alto nivel para stakeholders
 GRÁFICOS OBLIGATORIOS (máximo 2):
-  1) BAR_RANKING de top 5 campañas por FTD
-     - Dataset: top_campanas_mes (tomar top 5)
+  1) BAR_RANKING de campañas por FTD
+     - Dataset: top_campanas_mes (usar TODAS las filas disponibles, hasta un máximo de 10)
      - Highcharts: type="bar", xAxis.categories=[nombres campañas], series.data=[FTD]
+     - TÍTULO DINÁMICO: Contar las filas reales en top_campanas_mes.
+       Si hay N campañas, titular "Top N Campañas por FTD".
+       NUNCA titular "Top 5" si solo hay 4 campañas.
   2) LINE_TIME_SERIES de inversión diaria + FTD diario (2 series en mismo chart)
      - Dataset: serie_diaria_top (agrupar por fecha)
      - Highcharts: type="line", 2 series con diferentes colores

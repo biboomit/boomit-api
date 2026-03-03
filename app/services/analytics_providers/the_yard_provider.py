@@ -222,7 +222,8 @@ GRÁFICOS OBLIGATORIOS (máximo 2):
   1) BAR_RANKING de campañas por lead_sin_spam
      - Dataset: top_campanas_mes (usar TODAS las filas disponibles, hasta un máximo de 10)
      - Highcharts: type="bar"
-     - TÍTULO DINÁMICO: Si hay N campañas, titular "Top N Campañas por Lead Sin SPAM".
+     - TÍTULO DINÁMICO: Contar las filas reales en top_campanas_mes.
+       Si hay N campañas, titular "Top N Campañas por Lead Sin SPAM".
        NUNCA titular "Top 5" si solo hay 4 campañas.
   2) LINE_TIME_SERIES de inversión diaria + lead_sin_spam diario
      - Dataset: serie_diaria_agregada (usar directamente, ya viene agregado por fecha)
