@@ -152,8 +152,8 @@ class DashboardService:
             bigquery.ScalarQueryParameter("url", "STRING", payload.url),
             bigquery.ScalarQueryParameter("url_embebido", "STRING", payload.url_embebido),
             bigquery.ScalarQueryParameter("estado", "STRING", payload.estado),
-            bigquery.ScalarQueryParameter("fecha_creacion", "TIMESTAMP", now),
-            bigquery.ScalarQueryParameter("fecha_actualizacion", "TIMESTAMP", now),
+            bigquery.ScalarQueryParameter("fecha_creacion", "DATETIME", now),
+            bigquery.ScalarQueryParameter("fecha_actualizacion", "DATETIME", now),
         ]
         try:
             job_config = bigquery.QueryJobConfig(query_parameters=query_params)
@@ -181,7 +181,7 @@ class DashboardService:
 
         set_clauses.append("fecha_actualizacion = @fecha_actualizacion")
         query_params.append(
-            bigquery.ScalarQueryParameter("fecha_actualizacion", "TIMESTAMP", datetime.utcnow())
+            bigquery.ScalarQueryParameter("fecha_actualizacion", "DATETIME", datetime.utcnow())
         )
         query_params.append(bigquery.ScalarQueryParameter("producto_id", "STRING", producto_id))
 
