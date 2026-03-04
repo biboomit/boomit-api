@@ -7,7 +7,7 @@ Handles AI-powered chat responses for marketing report analysis.
 import logging
 from dataclasses import dataclass
 from app.integrations.mcp.host import MCPChatHost
-from typing import AsyncGenerator, Dict, Any, List
+from typing import AsyncGenerator, Dict, Any, List, Union
 from openai import AsyncOpenAI
 
 from app.core.config import settings
@@ -406,6 +406,29 @@ Si terminaste de analizar los datos y no hay más que decir, la respuesta termin
 **REGLA #4 — EFICIENCIA DE HERRAMIENTAS:**
 Cuando necesites datos de múltiples secciones, solicita TODAS las herramientas necesarias
 en una sola respuesta. No pidas una sección, esperes el resultado y luego pidas otra.
+
+**REGLA #5 — GRÁFICOS (HIGHCHARTS):**
+Cuando el usuario pida un gráfico, chart o visualización:
+1. Primero obtén los datos necesarios usando tool_get_report_blocks.
+2. Luego llama a tool_build_chart con los datos ya obtenidos.
+   - chart_type soportados: line, spline, area, bar, column, pie, funnel, combo.
+   - Elige el tipo de gráfico más adecuado para los datos (ej: "pie" para distribución,
+     "line" para tendencias temporales, "bar" para comparaciones, "funnel" para embudos).
+   - Incluye título descriptivo en español.
+3. Para gráficos que ya existen en un reporte, usa tool_get_report_chart con el report_id,
+   block_key y chart_index correspondientes.
+4. Después de generar el gráfico, añade un breve comentario textual interpretando los datos
+   mostrados en el gráfico. No repitas todos los números; resume la tendencia o insight principal.
+5. Puedes combinar datos de múltiples bloques en un solo gráfico si el usuario lo pide.
+6. Si la herramienta tool_build_chart no está disponible en tu lista de herramientas,
+   informa al usuario que la funcionalidad de gráficos no está disponible en este momento.
+
+**REGLA #6 — PROHIBICIONES ABSOLUTAS:**
+- NUNCA generes imágenes en base64, data URIs, ni markdown de imagen (![...](...)).
+- NUNCA inventes datos visuales, gráficos ASCII, SVG inline, ni contenido binario codificado.
+- Si no tienes herramientas de gráficos disponibles y el usuario pide un gráfico,
+  responde: "La funcionalidad de gráficos no está disponible en este momento."
+- Solo puedes generar gráficos mediante las herramientas tool_build_chart o tool_get_report_chart.
 """
         logger.debug(f"Built MCP system prompt for report {report_id}:\n{prompt}")
         return prompt
@@ -462,16 +485,17 @@ en una sola respuesta. No pidas una sección, esperes el resultado y luego pidas
         self,
         session: MarketingChatSession,
         user_message: str
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[Union[str, dict], None]:
         """
-        Stream AI response token-by-token.
+        Stream AI response token-by-token, plus chart events.
         
         Args:
             session: MarketingChatSession with context and history
             user_message: New message from user
         
         Yields:
-            Response tokens as they arrive
+            str: Response text tokens as they arrive
+            dict: Chart events with __type='chart' containing Highcharts specs
         
         Raises:
             BoomitAPIException: If OpenAI API call fails

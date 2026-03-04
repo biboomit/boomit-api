@@ -238,7 +238,51 @@ class MCPChatHost:
                         [_TC(tc) for tc in tool_calls_list], user_id
                     )
                     total_tool_calls += len(tool_results)
-                    current_messages.extend(tool_results)
+
+                    # Detect chart results and yield chart events to the SSE stream.
+                    # IMPORTANT: replace the full Highcharts spec in tool_results with a
+                    # lightweight summary so the LLM doesn't see/misinterpret the large JSON
+                    # blob and hallucinate a visual representation (e.g. fake base64 image).
+                    sanitized_tool_results = []
+                    for tool_result_msg in tool_results:
+                        try:
+                            result_data = json.loads(tool_result_msg.get("content", "{}"))
+                            if isinstance(result_data, dict) and result_data.get("is_chart"):
+                                chart_id = result_data.get("chart_id", "")
+                                chart_title = result_data.get(
+                                    "chart_title",
+                                    result_data.get("highcharts_spec", {}).get("title", {}).get("text", ""),
+                                )
+                                yield {
+                                    "__type": "chart",
+                                    "spec": result_data.get("highcharts_spec", {}),
+                                    "chart_id": chart_id,
+                                    "title": chart_title,
+                                }
+                                logger.info(
+                                    f"Chart event emitted: chart_id={chart_id}"
+                                )
+                                # Replace spec content with a terse summary.
+                                # This prevents the LLM from seeing the huge JSON and
+                                # hallucinating a visual rendering in its text response.
+                                sanitized_msg = dict(tool_result_msg)
+                                sanitized_msg["content"] = json.dumps({
+                                    "status": "chart_rendered",
+                                    "chart_id": chart_id,
+                                    "title": chart_title,
+                                    "message": (
+                                        "El gráfico fue generado y enviado al frontend para "
+                                        "renderizado interactivo. No incluyas imágenes ni "
+                                        "representaciones visuales en tu respuesta de texto."
+                                    ),
+                                }, ensure_ascii=False)
+                                sanitized_tool_results.append(sanitized_msg)
+                                continue
+                        except (json.JSONDecodeError, TypeError):
+                            pass  # Not a chart result — pass through unchanged
+                        sanitized_tool_results.append(tool_result_msg)
+
+                    current_messages.extend(sanitized_tool_results)
                     continue  # next round
 
                 else:

@@ -201,19 +201,32 @@ async def send_message(
         
         # Stream AI response
         async def event_generator():
-            """Generate SSE events from AI stream"""
+            """Generate SSE events from AI stream (text tokens + chart events)"""
             try:
                 accumulated_response = ""
                 
-                # Stream tokens from OpenAI
-                async for token in marketing_chat_service.stream_response(marketing_session, request.message):
-                    accumulated_response += token
+                # Stream tokens from OpenAI (may include chart events as dicts)
+                async for item in marketing_chat_service.stream_response(marketing_session, request.message):
+                    # Chart event — emit as a dedicated SSE event type
+                    if isinstance(item, dict) and item.get("__type") == "chart":
+                        yield {
+                            "event": "chart",
+                            "data": {
+                                "spec": item.get("spec", {}),
+                                "chart_id": item.get("chart_id", ""),
+                                "title": item.get("title", ""),
+                            }
+                        }
+                        continue
+
+                    # Regular text token
+                    accumulated_response += item
                     
                     # Send token as SSE event
                     yield {
                         "event": "message",
                         "data": {
-                            "token": token,
+                            "token": item,
                             "done": False
                         }
                     }

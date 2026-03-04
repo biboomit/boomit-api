@@ -11,6 +11,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+# Orden canónico de bloques — fuente de verdad para el ordenamiento.
+# selected_blocks de BD define cuáles están habilitados; esta lista define en qué orden van.
+CANONICAL_BLOCK_ORDER = [
+    "portada",
+    "agenda",
+    "resultados_generales",
+    "resumen_ejecutivo",
+    "evolucion_conversiones",
+    "analisis_region",
+    "cvr_indices",
+    "proyecciones",
+    "aprendizajes",
+    "despedida",
+]
+
+
 class ReportGenerationService:
     
     def __init__(self):
@@ -76,56 +93,40 @@ class ReportGenerationService:
 
     def _reorder_blocks(self, report_json: dict, agent_config: dict) -> dict:
         """
-        Re-ordena los bloques del reporte según el orden definido en selected_blocks
-        de la configuración del agente. Bloques no listados en selected_blocks se
-        agregan al final en el orden en que aparecieron en la respuesta del LLM.
+        Re-ordena los bloques del reporte según CANONICAL_BLOCK_ORDER.
+        
+        Lógica:
+        1. Lee selected_blocks de BD para saber qué bloques están habilitados.
+        2. Ordena los bloques generados por el LLM según CANONICAL_BLOCK_ORDER.
+        3. Bloques con block_key no reconocido en el orden canónico van al final,
+           manteniendo el orden relativo en que el LLM los generó.
+        4. No se descarta ningún bloque.
         """
-        selected_blocks_raw = agent_config.get("selected_blocks", [])
-        if isinstance(selected_blocks_raw, str):
-            try:
-                selected_blocks_raw = json.loads(selected_blocks_raw)
-            except (json.JSONDecodeError, TypeError):
-                selected_blocks_raw = []
-        if not selected_blocks_raw or not isinstance(selected_blocks_raw, list):
-            logger.info("🔀 [SERVICE] _reorder_blocks: no selected_blocks to reorder by, keeping LLM order")
-            return report_json
-
         blocks = report_json.get("blocks", [])
         if not blocks:
             return report_json
 
-        # Normalizar: crear mapa de block_key -> posición deseada
-        # Soportar tanto guiones_bajos como guiones-medios
-        order_map = {}  # normalized_key -> position
-        for idx, key in enumerate(selected_blocks_raw):
-            order_map[key] = idx
-            order_map[key.replace("-", "_")] = idx
-            order_map[key.replace("_", "-")] = idx
+        # Construir mapa de posición canónica (soportar guiones y guiones bajos)
+        canonical_pos = {}
+        for idx, key in enumerate(CANONICAL_BLOCK_ORDER):
+            canonical_pos[key] = idx
+            canonical_pos[key.replace("_", "-")] = idx
+            canonical_pos[key.replace("-", "_")] = idx
 
-        # Crear índice de bloques por block_key
-        blocks_by_key = {}
-        for block in blocks:
+        # Valor centinela para bloques no reconocidos → van después de todos los canónicos
+        unknown_base = len(CANONICAL_BLOCK_ORDER)
+
+        def _sort_key(block):
             bk = block.get("block_key", "") if isinstance(block, dict) else getattr(block, "block_key", "")
-            blocks_by_key[bk] = block
+            return canonical_pos.get(bk, unknown_base)
 
-        # Ordenar: primero los que están en selected_blocks (en orden), luego el resto
-        ordered = []
-        seen_keys = set()
-        for key in selected_blocks_raw:
-            # Buscar el bloque con este key o su variante normalizada
-            block = blocks_by_key.get(key) or blocks_by_key.get(key.replace("-", "_")) or blocks_by_key.get(key.replace("_", "-"))
-            if block:
-                ordered.append(block)
-                bk = block.get("block_key", "") if isinstance(block, dict) else getattr(block, "block_key", "")
-                seen_keys.add(bk)
+        ordered = sorted(blocks, key=_sort_key)
 
-        # Agregar bloques extra que el LLM haya generado pero no estén en selected_blocks
-        for block in blocks:
-            bk = block.get("block_key", "") if isinstance(block, dict) else getattr(block, "block_key", "")
-            if bk not in seen_keys:
-                ordered.append(block)
-
-        logger.info(f"🔀 [SERVICE] _reorder_blocks: reordered {len(ordered)} blocks. Order: {[b.get('block_key') if isinstance(b, dict) else getattr(b, 'block_key', '?') for b in ordered]}")
+        logger.info(
+            "🔀 [SERVICE] _reorder_blocks: reordered %d blocks. Order: %s",
+            len(ordered),
+            [b.get("block_key") if isinstance(b, dict) else getattr(b, "block_key", "?") for b in ordered],
+        )
         report_json["blocks"] = ordered
         return report_json
 
