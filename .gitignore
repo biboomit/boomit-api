@@ -70,3 +70,5 @@ service-account-key.json
 
 # Kubernetes secrets
 secrets/
+
+*.md

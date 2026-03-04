@@ -37,6 +37,48 @@ class DashboardListResponse(BaseModel):
     page: int
     per_page: int
 
+class DashboardCreateRequest(BaseModel):
+    dash_id: str = Field(..., description="Identificador único del dashboard")
+    producto_id: str = Field(..., description="Identificador único del producto")
+    url: str = Field(..., description="URL del dashboard")
+    url_embebido: str = Field(..., description="URL embebida del dashboard")
+    estado: str = Field("Activo", description="Estado del dashboard (ej: Activo, Inactivo)")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "dash_id": "db001",
+                "producto_id": "prod123",
+                "url": "https://example.com/dashboards/db001",
+                "url_embebido": "https://example.com/embed/db001",
+                "estado": "Activo"
+            }
+        }
+
+
+class DashboardCreateResponse(BaseModel):
+    message: str
+    dash_id: str
+    rows_affected: int
+
+
+class DashboardUpdateRequest(BaseModel):
+    url: Optional[str] = Field(None, description="Nueva URL del dashboard")
+    url_embebido: Optional[str] = Field(None, description="Nueva URL embebida del dashboard")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "url": "https://example.com/dashboards/db001",
+                "url_embebido": "https://example.com/embed/db001"
+            }
+        }
+
+class DashboardUpdateResponse(BaseModel):
+    message: str
+    producto_id: str
+    rows_affected: int
+
 class DashboardInternal(BaseModel):
     dashboard_id: str
     empresa_id: str
