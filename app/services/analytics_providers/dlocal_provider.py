@@ -208,7 +208,8 @@ GRÁFICOS OBLIGATORIOS (máximo 2):
   1) BAR_RANKING de campañas por contact_sales_submission
      - Dataset: top_campanas_mes (usar TODAS las filas disponibles, hasta un máximo de 10)
      - Highcharts: type="bar"
-     - TÍTULO DINÁMICO: Si hay N campañas, titular "Top N Campañas por Contact Sales Submissions".
+     - TÍTULO DINÁMICO: Contar las filas reales en top_campanas_mes.
+       Si hay N campañas, titular "Top N Campañas por Contact Sales Submissions".
        NUNCA titular "Top 5" si solo hay 4 campañas.
   2) LINE_TIME_SERIES de inversión diaria + contact_sales_submission diario
      - Dataset: serie_diaria_agregada (usar directamente, ya viene agregado por fecha)

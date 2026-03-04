@@ -126,6 +126,7 @@ jobs:
             --from-literal=REPORT_SERVICE_URL="${{ secrets.REPORT_SERVICE_URL }}" \
             --from-literal=MCP_ENABLED="${{ secrets.MCP_ENABLED }}" \
             --from-literal=MCP_BIGQUERY_SERVER_URL="${{ secrets.MCP_BIGQUERY_SERVER_URL }}" \
+            --from-literal=MCP_HIGHCHARTS_SERVER_URL="${{ secrets.MCP_HIGHCHARTS_SERVER_URL }}" \
             --namespace=default \
             --dry-run=client -o yaml | kubectl apply -f -
 
