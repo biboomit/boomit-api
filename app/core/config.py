@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     # MCP (Model Context Protocol) Configuration
     MCP_ENABLED: bool = Field(default=True, description="Enable MCP for marketing chat (feature flag)")
     MCP_BIGQUERY_SERVER_URL: str = Field(default="http://localhost:8100/mcp", description="URL of the MCP BigQuery Server")
+    MCP_HIGHCHARTS_SERVER_URL: str = Field(default="http://localhost:8200/mcp", description="URL of the MCP Highcharts Server")
     MCP_MAX_TOOL_ROUNDS: int = Field(default=5, description="Max tool-calling iterations per message")
 
     # File Upload Configuration

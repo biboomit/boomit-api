@@ -1,7 +1,7 @@
 """
 MCP Integration for Boomit API
 
-Provides MCP Client and Host for connecting to MCP BigQuery Server.
+Provides MCP Client and Host for connecting to MCP servers (BigQuery, Highcharts).
 """
 
 from app.integrations.mcp.client import MCPClientManager
